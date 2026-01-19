@@ -1,0 +1,14 @@
+# =============================================================================
+# Central Account Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+
+region        = "us-east-1"
+project_name  = "bedrock-protected"
+
+# Client account ID (where the Bedrock Agent will be deployed)
+client_account_id = "875228160179"
+
+# Security alerts (at least one is recommended)
+alert_email       = "security@yourcompany.com"
+slack_webhook_url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"

@@ -1,0 +1,45 @@
+# =============================================================================
+# Client Account Configuration
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+
+region        = "us-east-1"
+project_name  = "bedrock-protected"
+client_name   = "acme-corp"
+
+# Central account ID (your admin account)
+central_account_id = "190045319446"
+
+# =============================================================================
+# Bedrock Agent Configuration
+# =============================================================================
+
+agent_name        = "acme-assistant"
+agent_description = "AI Assistant for ACME Corp - Protected"
+foundation_model  = "amazon.nova-lite-v1:0"
+
+# =============================================================================
+# Prompts (SENSITIVE - DO NOT COMMIT)
+# =============================================================================
+# Option 1: Set directly (not recommended for production)
+# system_prompt      = "You are a helpful assistant..."
+# instruction_prompt = "Follow these instructions..."
+
+# Option 2: Use environment variables (recommended)
+# export TF_VAR_system_prompt="Your system prompt here"
+# export TF_VAR_instruction_prompt="Your instruction prompt here"
+
+# Option 3: Use a separate secrets file (gitignored)
+# Create a file called secrets.auto.tfvars with:
+# system_prompt      = "..."
+# instruction_prompt = "..."
+
+# =============================================================================
+# Central Account Resources
+# =============================================================================
+# Get these values from the central environment outputs:
+# cd ../central && terraform output for_client_environment
+
+central_sns_topic_arn     = "arn:aws:sns:us-east-1:190045319446:bedrock-protected-security-alerts"
+central_audit_bucket_arn  = "arn:aws:s3:::bedrock-protected-audit-logs-190045319446"
+central_audit_bucket_name = "bedrock-protected-audit-logs-190045319446"
