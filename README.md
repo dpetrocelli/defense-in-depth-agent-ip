@@ -1,62 +1,62 @@
 # Bedrock Protected Mode
 
-Terraform module para desplegar **Amazon Bedrock Agents** en cuentas de clientes con protección total de la propiedad intelectual (prompts, instrucciones, lógica).
+Terraform module to deploy **Amazon Bedrock Agents** in customer accounts with full intellectual property protection (prompts, instructions, logic).
 
-## El Problema
+## The Problem
 
-Cuando desplegás un Bedrock Agent en la cuenta de un cliente:
-- **La data del cliente debe quedarse en su cuenta** (compliance, seguridad)
-- **Tus prompts son propiedad intelectual** que no querés exponer
-- El cliente con acceso admin/root técnicamente podría ver todo
+When you deploy a Bedrock Agent in a customer's account:
+- **Customer data must stay in their account** (compliance, security)
+- **Your prompts are intellectual property** that you don't want to expose
+- The customer with admin/root access could technically see everything
 
-## La Solución: Arquitectura "Paranoid Mode"
+## The Solution: "Paranoid Mode" Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Cuenta del Cliente                           │
+│                      Customer Account                           │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  KMS Key (tuya)                                           │ │
-│  │  - Cliente: ❌ NADA                                       │ │
-│  │  - Tu cuenta: ✅ Full access                              │ │
+│  │  KMS Key (yours)                                          │ │
+│  │  - Customer: ❌ NOTHING                                   │ │
+│  │  - Your account: ✅ Full access                           │ │
 │  │  - Bedrock service role: ✅ Decrypt only                  │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  SSM Parameter (prompt encriptado con KMS)                │ │
-│  │  - Cliente: ❌ ssm:GetParameter DENIED                    │ │
+│  │  SSM Parameter (prompt encrypted with KMS)                │ │
+│  │  - Customer: ❌ ssm:GetParameter DENIED                   │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
 │  │  Bedrock Agent                                            │ │
-│  │  - Cliente: ✅ InvokeAgent ONLY                           │ │
-│  │  - Cliente: ❌ GetAgent, UpdateAgent, etc.                │ │
-│  │  - Logging: DISABLED o encriptado con tu KMS             │ │
+│  │  - Customer: ✅ InvokeAgent ONLY                          │ │
+│  │  - Customer: ❌ GetAgent, UpdateAgent, etc.               │ │
+│  │  - Logging: DISABLED or encrypted with your KMS           │ │
 │  │  - Tracing: DISABLED                                      │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  CloudWatch Logs (si existen)                             │ │
-│  │  - Encriptados con tu KMS                                 │ │
-│  │  - Cliente: ❌ logs:GetLogEvents DENIED                   │ │
+│  │  CloudWatch Logs (if they exist)                          │ │
+│  │  - Encrypted with your KMS                                │ │
+│  │  - Customer: ❌ logs:GetLogEvents DENIED                  │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  CloudTrail → EventBridge → SNS (a tu cuenta)            │ │
+│  │  CloudTrail → EventBridge → SNS (to your account)         │ │
 │  │                                                           │ │
-│  │  Alertas si el cliente intenta:                          │ │
+│  │  Alerts if customer attempts:                             │ │
 │  │  - kms:PutKeyPolicy                                       │ │
-│  │  - iam:* en roles de Bedrock                              │ │
-│  │  - ssm:GetParameter en /bedrock/*                         │ │
+│  │  - iam:* on Bedrock roles                                 │ │
+│  │  - ssm:GetParameter on /bedrock/*                         │ │
 │  │  - bedrock:GetAgent                                       │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │  SCP (si usas Organizations)                              │ │
+│  │  SCP (if you use Organizations)                           │ │
 │  │                                                           │ │
 │  │  Deny:                                                    │ │
-│  │  - kms:* en tu KMS key ARN                                │ │
-│  │  - iam:* en roles que vos creaste                         │ │
+│  │  - kms:* on your KMS key ARN                              │ │
+│  │  - iam:* on roles you created                             │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -64,14 +64,14 @@ Cuando desplegás un Bedrock Agent en la cuenta de un cliente:
          Cross-Account Access │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Tu Cuenta                                 │
+│                        Your Account                             │
 │                                                                 │
 │  ┌─────────────────┐    ┌─────────────────────────────────┐    │
 │  │  IAM Role       │    │  CI/CD Pipeline                 │    │
 │  │  "AgentAdmin"   │    │                                 │    │
-│  │                 │    │  - Actualiza prompts            │    │
-│  │  Puede:         │    │  - Despliega nuevas versiones   │    │
-│  │  - ssm:Put*     │    │  - Rota KMS keys si necesario   │    │
+│  │                 │    │  - Updates prompts              │    │
+│  │  Can:           │    │  - Deploys new versions         │    │
+│  │  - ssm:Put*     │    │  - Rotates KMS keys if needed   │    │
 │  │  - kms:*        │    │                                 │    │
 │  │  - bedrock:*    │    └─────────────────────────────────┘    │
 │  └─────────────────┘                                           │
@@ -79,75 +79,75 @@ Cuando desplegás un Bedrock Agent en la cuenta de un cliente:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Capas de Protección
+## Protection Layers
 
-### 1. KMS Key con Policy Blindada
-- El cliente NO tiene ningún permiso sobre la key
-- Solo tu cuenta (cross-account) y el Bedrock service role pueden decrypt
-- Imposible modificar sin tu autorización
+### 1. KMS Key with Hardened Policy
+- The customer has NO permissions on the key
+- Only your account (cross-account) and the Bedrock service role can decrypt
+- Impossible to modify without your authorization
 
-### 2. SSM Parameters Encriptados
-- Los prompts se guardan como `SecureString`
-- Encriptados con tu KMS key
-- Resource policy que deniega acceso al cliente
+### 2. Encrypted SSM Parameters
+- Prompts are stored as `SecureString`
+- Encrypted with your KMS key
+- Resource policy that denies customer access
 
-### 3. IAM Deny Explícito
-- El cliente SOLO puede `bedrock:InvokeAgent`
-- DENY explícito en:
+### 3. Explicit IAM Deny
+- The customer can ONLY use `bedrock:InvokeAgent`
+- Explicit DENY on:
   - `bedrock:GetAgent`
   - `bedrock:GetPrompt`
-  - `ssm:GetParameter` (para `/bedrock/*`)
+  - `ssm:GetParameter` (for `/bedrock/*`)
   - `kms:Decrypt`
 
-### 4. Logging Protegido
-- CloudWatch Logs deshabilitado O encriptado con tu KMS
-- X-Ray/Tracing deshabilitado
-- El cliente no puede ver logs de ejecución
+### 4. Protected Logging
+- CloudWatch Logs disabled OR encrypted with your KMS
+- X-Ray/Tracing disabled
+- Customer cannot see execution logs
 
-### 5. Monitoreo y Alertas
-- CloudTrail captura TODOS los intentos de acceso
-- EventBridge rules detectan acciones sospechosas
-- SNS notifica a TU cuenta en tiempo real
-- Evidencia guardada para acciones legales
+### 5. Monitoring and Alerts
+- CloudTrail captures ALL access attempts
+- EventBridge rules detect suspicious actions
+- SNS notifies YOUR account in real-time
+- Evidence saved for legal actions
 
-### 6. SCP (Opcional - AWS Organizations)
-- Bloquea modificaciones a nivel de organización
-- Ni siquiera root puede modificar tus recursos
+### 6. SCP (Optional - AWS Organizations)
+- Blocks modifications at the organization level
+- Not even root can modify your resources
 
-## Nivel de Seguridad
+## Security Level
 
-| Escenario | ¿Puede ver el prompt? | Notas |
-|-----------|----------------------|-------|
-| Cliente normal usando el agent | ❌ No | Solo puede invocar |
-| Cliente curioso en la consola | ❌ No | Access Denied |
-| Cliente con IAM Admin | ❌ No | KMS key policy lo bloquea |
-| Cliente con Root + modifica KMS policy | ⚠️ Sí | Pero te enterás por alertas |
-| Cliente con Root + SCP activo | ❌ No | SCP lo bloquea |
+| Scenario | Can they see the prompt? | Notes |
+|----------|-------------------------|-------|
+| Normal customer using the agent | ❌ No | Can only invoke |
+| Curious customer in the console | ❌ No | Access Denied |
+| Customer with IAM Admin | ❌ No | KMS key policy blocks them |
+| Customer with Root + modifies KMS policy | ⚠️ Yes | But you'll know via alerts |
+| Customer with Root + SCP active | ❌ No | SCP blocks them |
 
-## Alertas que Recibís
+## Alerts You Receive
 
-Cuando el cliente intenta acceder a recursos protegidos:
+When the customer attempts to access protected resources:
 
 ```
-🚨 ALERTA: Intento de acceso no autorizado
+🚨 ALERT: Unauthorized access attempt
 
-Cuenta: 123456789012 (Cliente XYZ)
-Tiempo: 2024-01-15 14:32:15 UTC
-Usuario: arn:aws:iam::123456789012:user/admin
-Acción: ssm:GetParameter
-Recurso: /bedrock/agent/system-prompt
-Resultado: ACCESS DENIED
+Account: 123456789012 (Customer XYZ)
+Time: 2024-01-15 14:32:15 UTC
+User: arn:aws:iam::123456789012:user/admin
+Action: ssm:GetParameter
+Resource: /bedrock/agent/system-prompt
+Result: ACCESS DENIED
 
 ────────────────────────────────────
-Esta evidencia ha sido guardada en:
-s3://tu-bucket/audit-logs/2024/01/15/...
+This evidence has been saved to:
+s3://your-bucket/audit-logs/2024/01/15/...
 
-Contrato: Sección 5.2 - Prohibición de
-          ingeniería inversa
+Contract: Section 5.2 - Reverse engineering
+          prohibition
 ────────────────────────────────────
 ```
 
-## Estructura del Módulo
+## Module Structure
 
 ```
 bedrock-protected-mode/
@@ -156,75 +156,75 @@ bedrock-protected-mode/
 ├── variables.tf
 ├── outputs.tf
 ├── versions.tf
-├── kms.tf                 # KMS Key con policy blindada
-├── ssm.tf                 # Prompts encriptados
+├── kms.tf                 # KMS Key with hardened policy
+├── ssm.tf                 # Encrypted prompts
 ├── bedrock.tf             # Agent + Alias
-├── iam.tf                 # Roles y policies restrictivas
+├── iam.tf                 # Restrictive roles and policies
 ├── monitoring.tf          # CloudTrail + EventBridge + SNS
-├── scp.tf                 # Service Control Policy (opcional)
+├── scp.tf                 # Service Control Policy (optional)
 ├── examples/
 │   └── complete/
 │       ├── main.tf
 │       └── terraform.tfvars.example
 └── docs/
-    ├── SECURITY.md        # Documentación para el cliente
-    └── CONTRACT_TEMPLATE.md # Template de cláusulas legales
+    ├── SECURITY.md        # Documentation for the customer
+    └── CONTRACT_TEMPLATE.md # Template for legal clauses
 ```
 
-## Uso
+## Usage
 
 ```hcl
 module "bedrock_protected" {
   source = "github.com/dpetrocelli/bedrock-protected-mode"
 
-  # Tu cuenta (para cross-account access)
+  # Your account (for cross-account access)
   admin_account_id = "111111111111"
 
-  # Cuenta del cliente
+  # Customer account
   client_account_id = "222222222222"
 
-  # Configuración del Agent
+  # Agent configuration
   agent_name        = "my-protected-agent"
   foundation_model  = "anthropic.claude-3-sonnet-20240229-v1:0"
 
-  # Prompts (se encriptan automáticamente)
+  # Prompts (automatically encrypted)
   system_prompt     = file("prompts/system.txt")
   instruction       = file("prompts/instruction.txt")
 
-  # Alertas
-  alert_email       = "security@tuempresa.com"
+  # Alerts
+  alert_email       = "security@yourcompany.com"
   slack_webhook_url = "https://hooks.slack.com/..."
 
   # Tags
   tags = {
-    Client      = "ClienteXYZ"
+    Client      = "CustomerXYZ"
     Environment = "production"
   }
 }
 ```
 
-## Requisitos
+## Requirements
 
 - Terraform >= 1.0
 - AWS Provider >= 5.0
-- Cuenta AWS del cliente con permisos para desplegar
-- Tu cuenta AWS con IAM role para cross-account access
+- Customer's AWS account with deployment permissions
+- Your AWS account with IAM role for cross-account access
 
-## Consideraciones Legales
+## Legal Considerations
 
-Este módulo provee protección **técnica**. Para protección completa, combiná con:
+This module provides **technical** protection. For complete protection, combine with:
 
-1. **Contrato de servicio** con cláusulas de:
-   - Prohibición de ingeniería inversa
-   - Prohibición de acceso a componentes protegidos
-   - Penalidades por incumplimiento
+1. **Service contract** with clauses for:
+   - Reverse engineering prohibition
+   - Prohibition of access to protected components
+   - Penalties for non-compliance
 
-2. **NDA** específico para la propiedad intelectual
+2. **NDA** specific to intellectual property
 
-3. **Documentación de auditoría** que demuestre los intentos de acceso no autorizado
+3. **Audit documentation** that demonstrates unauthorized access attempts
 
-Ver [docs/CONTRACT_TEMPLATE.md](docs/CONTRACT_TEMPLATE.md) para templates.
+See [docs/CONTRACT_TEMPLATE.md](docs/CONTRACT_TEMPLATE.md) for templates.
 
 ## License
 
-Propietary - All rights reserved.
+Proprietary - All rights reserved.

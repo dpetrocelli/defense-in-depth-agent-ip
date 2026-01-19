@@ -1,90 +1,90 @@
 # CLAUDE.md - Bedrock Protected Mode
 
-## Proyecto
+## Project
 
-Terraform module para desplegar **Amazon Bedrock Agents** en cuentas de clientes con protección total de la propiedad intelectual (prompts, instrucciones).
+Terraform module to deploy **Amazon Bedrock Agents** in customer accounts with full intellectual property protection (prompts, instructions).
 
-## El Problema a Resolver
+## The Problem to Solve
 
-- El Bedrock Agent DEBE vivir en la cuenta del cliente (su data no puede salir)
-- Los prompts son propiedad intelectual nuestra que NO queremos exponer
-- Necesitamos que el cliente pueda USAR el agent pero NO ver los prompts
+- The Bedrock Agent MUST live in the customer's account (their data cannot leave)
+- The prompts are our intellectual property that we DO NOT want to expose
+- We need the customer to be able to USE the agent but NOT see the prompts
 
-## Arquitectura Multi-Cuenta
+## Multi-Account Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  CUENTA CLIENTE: 875228160179                                   │
+│  CLIENT ACCOUNT: 875228160179                                   │
 │  Profile: AdministratorAccess-875228160179                      │
 │                                                                 │
-│  Vive acá:                                                      │
+│  Lives here:                                                    │
 │  - Bedrock Agent (Nova Lite)                                   │
-│  - SSM Parameters (prompts encriptados con KMS)                │
-│  - KMS Key (controlada por cuenta central)                     │
-│  - CloudTrail + EventBridge (alertas a cuenta central)         │
-│  - IAM Policies restrictivas                                   │
+│  - SSM Parameters (prompts encrypted with KMS)                 │
+│  - KMS Key (controlled by central account)                     │
+│  - CloudTrail + EventBridge (alerts to central account)        │
+│  - Restrictive IAM Policies                                    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ Cross-Account Trust
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  CUENTA CENTRAL (ADMIN): 190045319446                          │
+│  CENTRAL ACCOUNT (ADMIN): 190045319446                         │
 │  Profile: AdministratorAccess-190045319446                      │
 │                                                                 │
-│  Vive acá:                                                      │
-│  - IAM Role "AgentAdmin" (para administrar el agent)           │
-│  - S3 Bucket para audit logs (evidencia legal)                 │
-│  - SNS Topic (recibe alertas de cuenta cliente)                │
-│  - Secrets Manager (source of truth de prompts)                │
+│  Lives here:                                                    │
+│  - IAM Role "AgentAdmin" (to manage the agent)                 │
+│  - S3 Bucket for audit logs (legal evidence)                   │
+│  - SNS Topic (receives alerts from client account)             │
+│  - Secrets Manager (source of truth for prompts)               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Capas de Seguridad (Paranoid Mode)
+## Security Layers (Paranoid Mode)
 
-1. **KMS Key Blindada**: El cliente NO tiene ningún permiso, solo cuenta central + Bedrock service
-2. **SSM SecureString**: Prompts encriptados, cliente no puede leer
-3. **IAM Deny Explícito**: Cliente solo puede `InvokeAgent`, todo lo demás denegado
-4. **CloudTrail + EventBridge**: Detecta cualquier intento de acceso no autorizado
-5. **Alertas a SNS**: Notifica a cuenta central en tiempo real
-6. **S3 Audit Logs**: Evidencia legal para el contrato
+1. **Hardened KMS Key**: The client has NO permissions, only central account + Bedrock service
+2. **SSM SecureString**: Encrypted prompts, client cannot read
+3. **Explicit IAM Deny**: Client can only `InvokeAgent`, everything else is denied
+4. **CloudTrail + EventBridge**: Detects any unauthorized access attempt
+5. **SNS Alerts**: Notifies central account in real-time
+6. **S3 Audit Logs**: Legal evidence for the contract
 
-## Estructura del Repo
+## Repo Structure
 
 ```
 bedrock-protected-mode/
 ├── modules/
-│   ├── central-account/      # Deploy en 190045319446
-│   │   ├── iam.tf            # Role cross-account
-│   │   ├── s3.tf             # Bucket audit
-│   │   └── sns.tf            # Alertas
+│   ├── central-account/      # Deploy to 190045319446
+│   │   ├── iam.tf            # Cross-account role
+│   │   ├── s3.tf             # Audit bucket
+│   │   └── sns.tf            # Alerts
 │   │
-│   └── client-account/       # Deploy en 875228160179
-│       ├── kms.tf            # KMS blindada
-│       ├── ssm.tf            # Prompts encriptados
+│   └── client-account/       # Deploy to 875228160179
+│       ├── kms.tf            # Hardened KMS
+│       ├── ssm.tf            # Encrypted prompts
 │       ├── bedrock.tf        # Agent (Nova Lite)
-│       ├── iam.tf            # Policies restrictivas
+│       ├── iam.tf            # Restrictive policies
 │       └── monitoring.tf     # CloudTrail + EventBridge
 │
 ├── environments/
-│   ├── central/              # Parent para 190045319446
-│   └── client/               # Parent para 875228160179
+│   ├── central/              # Parent for 190045319446
+│   └── client/               # Parent for 875228160179
 │
 └── docs/
-    ├── DEPLOYMENT.md         # Guía de deploy
-    ├── SECURITY.md           # Arquitectura de seguridad
-    └── CONTRACT_TEMPLATE.md  # Cláusulas legales
+    ├── DEPLOYMENT.md         # Deployment guide
+    ├── SECURITY.md           # Security architecture
+    └── CONTRACT_TEMPLATE.md  # Legal clauses
 ```
 
-## Orden de Deploy
+## Deployment Order
 
-1. **Primero cuenta central** (190045319446):
+1. **First central account** (190045319446):
    ```bash
    cd environments/central
    aws sso login --profile AdministratorAccess-190045319446
    terraform init && terraform apply
    ```
 
-2. **Después cuenta cliente** (875228160179):
+2. **Then client account** (875228160179):
    ```bash
    cd environments/client
    aws sso login --profile AdministratorAccess-875228160179
@@ -93,39 +93,39 @@ bedrock-protected-mode/
 
 ## Foundation Model
 
-Usamos **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) - no requiere habilitación especial.
+We use **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) - no special enablement required.
 
-## Pendientes / TODOs
+## Pending / TODOs
 
-- [ ] Deploy y testing en ambas cuentas
-- [ ] Validar que el agent funciona con Nova Lite
-- [ ] Probar que las alertas llegan correctamente
-- [ ] Testear los deny policies (intentar leer prompts como cliente)
-- [ ] Agregar Action Groups si se necesitan (Lambda integrations)
-- [ ] Considerar Knowledge Bases para RAG
+- [ ] Deploy and test in both accounts
+- [ ] Validate that the agent works with Nova Lite
+- [ ] Verify that alerts arrive correctly
+- [ ] Test the deny policies (try to read prompts as client)
+- [ ] Add Action Groups if needed (Lambda integrations)
+- [ ] Consider Knowledge Bases for RAG
 
 ## Git
 
-- No incluir "Co-Authored-By" en commits
-- Los prompts reales van en `environments/client/prompts/` (gitignored)
-- Los secrets van en `terraform.tfvars` (gitignored)
+- Do not include "Co-Authored-By" in commits
+- Real prompts go in `environments/client/prompts/` (gitignored)
+- Secrets go in `terraform.tfvars` (gitignored)
 
-## Comandos Útiles
+## Useful Commands
 
 ```bash
-# Login SSO
+# SSO Login
 aws sso login --profile AdministratorAccess-190045319446
 aws sso login --profile AdministratorAccess-875228160179
 
-# Invocar el agent (después de deploy)
+# Invoke the agent (after deploy)
 aws bedrock-agent-runtime invoke-agent \
   --agent-id AGENT_ID \
   --agent-alias-id ALIAS_ID \
   --session-id "test-001" \
-  --input-text "Hola" \
+  --input-text "Hello" \
   --profile AdministratorAccess-875228160179
 
-# Testear que el cliente NO puede leer prompts (debe fallar)
+# Test that the client CANNOT read prompts (should fail)
 aws ssm get-parameter \
   --name "/bedrock-protected/bedrock/system-prompt" \
   --with-decryption \
