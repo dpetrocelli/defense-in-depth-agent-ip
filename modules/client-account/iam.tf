@@ -65,6 +65,8 @@ resource "aws_iam_role_policy" "ecs_execution_ecr" {
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task"
 
+  # Security: Restrict to only tasks running in our protected cluster
+  # This prevents the client from creating arbitrary tasks with this role
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -74,6 +76,16 @@ resource "aws_iam_role" "ecs_task" {
           Service = "ecs-tasks.amazonaws.com"
         }
         Action = "sts:AssumeRole"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = local.client_account_id
+          }
+          ArnLike = {
+            # Only tasks in our specific cluster can assume this role
+            # Format: arn:aws:ecs:region:account:task/cluster-name/task-id
+            "aws:SourceArn" = "arn:aws:ecs:${local.region}:${local.client_account_id}:task/${var.project_name}-agent/*"
+          }
+        }
       }
     ]
   })
