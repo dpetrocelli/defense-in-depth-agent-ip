@@ -290,3 +290,112 @@ resource "aws_cloudwatch_event_target" "ecs_exec_to_sns" {
 EOF
   }
 }
+
+# =============================================================================
+# Rule: Detect CloudTrail tampering (critical - we lose visibility)
+# =============================================================================
+
+resource "aws_cloudwatch_event_rule" "cloudtrail_tampering" {
+  name        = "${var.project_name}-cloudtrail-tampering"
+  description = "Detects attempts to disable or modify CloudTrail logging"
+
+  event_pattern = jsonencode({
+    source      = ["aws.cloudtrail"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["cloudtrail.amazonaws.com"]
+      eventName   = ["StopLogging", "DeleteTrail", "UpdateTrail", "PutEventSelectors"]
+    }
+  })
+
+  tags = local.default_tags
+}
+
+resource "aws_cloudwatch_event_target" "cloudtrail_to_sns" {
+  rule      = aws_cloudwatch_event_rule.cloudtrail_tampering.name
+  target_id = "send-to-central-sns"
+  arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
+
+  input_transformer {
+    input_paths = {
+      account   = "$.account"
+      time      = "$.time"
+      user      = "$.detail.userIdentity.arn"
+      action    = "$.detail.eventName"
+      trailName = "$.detail.requestParameters.name"
+    }
+    input_template = <<EOF
+{
+  "alert_type": "CLOUDTRAIL_TAMPERING",
+  "severity": "CRITICAL",
+  "account": <account>,
+  "timestamp": <time>,
+  "user": <user>,
+  "action": <action>,
+  "trail": <trailName>,
+  "message": "CRITICAL: CloudTrail logging may have been disabled - audit visibility compromised"
+}
+EOF
+  }
+}
+
+# =============================================================================
+# Rule: Detect unauthorized AssumeRole on task role
+# =============================================================================
+
+resource "aws_cloudwatch_event_rule" "task_role_assumed" {
+  name        = "${var.project_name}-task-role-assumed"
+  description = "Detects when the protected task role is assumed"
+
+  event_pattern = jsonencode({
+    source      = ["aws.sts"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["sts.amazonaws.com"]
+      eventName   = ["AssumeRole"]
+      requestParameters = {
+        roleArn = [{
+          suffix = "${var.project_name}-ecs-task"
+        }]
+      }
+      # Alert only if NOT from ECS service
+      userIdentity = {
+        invokedBy = [{
+          "anything-but" = "ecs-tasks.amazonaws.com"
+        }]
+      }
+    }
+  })
+
+  tags = local.default_tags
+}
+
+resource "aws_cloudwatch_event_target" "task_role_to_sns" {
+  rule      = aws_cloudwatch_event_rule.task_role_assumed.name
+  target_id = "send-to-central-sns"
+  arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
+
+  input_transformer {
+    input_paths = {
+      account   = "$.account"
+      time      = "$.time"
+      user      = "$.detail.userIdentity.arn"
+      sourceIp  = "$.detail.sourceIPAddress"
+      roleArn   = "$.detail.requestParameters.roleArn"
+    }
+    input_template = <<EOF
+{
+  "alert_type": "UNAUTHORIZED_ROLE_ASSUMPTION",
+  "severity": "CRITICAL",
+  "account": <account>,
+  "timestamp": <time>,
+  "user": <user>,
+  "source_ip": <sourceIp>,
+  "role": <roleArn>,
+  "message": "CRITICAL: Protected task role assumed from non-ECS source"
+}
+EOF
+  }
+}

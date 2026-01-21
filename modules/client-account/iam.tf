@@ -58,12 +58,71 @@ resource "aws_iam_role_policy" "ecs_execution_ecr" {
 }
 
 # =============================================================================
+# ECS Task Role Permission Boundary
+# =============================================================================
+# Limits what the task role can do even if someone modifies its policies
+
+resource "aws_iam_policy" "task_permission_boundary" {
+  name        = "${var.project_name}-task-boundary"
+  description = "Permission boundary for ECS task role - limits maximum permissions"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowBedrock"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:${local.region}::foundation-model/*"
+      },
+      {
+        Sid    = "AllowSecretsManager"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        # Only secrets in the central account with our prefix
+        Resource = "arn:aws:secretsmanager:${local.region}:${var.central_account_id}:secret:${var.project_name}/*"
+      },
+      {
+        Sid    = "AllowKMS"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "arn:aws:kms:${local.region}:${var.central_account_id}:key/*"
+      },
+      {
+        Sid    = "DenyEverythingElse"
+        Effect = "Deny"
+        Action = [
+          "iam:*",
+          "organizations:*",
+          "account:*",
+          "sts:AssumeRole"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = local.default_tags
+}
+
+# =============================================================================
 # ECS Task Role
 # =============================================================================
 # Used by the container to access AWS services
 
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task"
+
+  # Security: Permission boundary limits max permissions even if policies are modified
+  permissions_boundary = aws_iam_policy.task_permission_boundary.arn
 
   # Security: Restrict to only tasks running in our protected cluster
   # This prevents the client from creating arbitrary tasks with this role
