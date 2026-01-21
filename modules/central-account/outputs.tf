@@ -3,9 +3,19 @@ output "central_account_id" {
   value       = local.central_account_id
 }
 
-output "agent_admin_role_arn" {
-  description = "ARN of the IAM role for cross-account administration"
-  value       = aws_iam_role.agent_admin.arn
+output "ecr_repository_url" {
+  description = "URL of the ECR repository for the agent container"
+  value       = aws_ecr_repository.agent.repository_url
+}
+
+output "ecr_repository_arn" {
+  description = "ARN of the ECR repository"
+  value       = aws_ecr_repository.agent.arn
+}
+
+output "agent_prompts_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing agent prompts"
+  value       = aws_secretsmanager_secret.agent_prompts.arn
 }
 
 output "audit_logs_bucket_name" {
@@ -23,12 +33,20 @@ output "security_alerts_topic_arn" {
   value       = aws_sns_topic.security_alerts.arn
 }
 
-output "system_prompt_secret_arn" {
-  description = "ARN of the Secrets Manager secret for system prompt"
-  value       = aws_secretsmanager_secret.system_prompt.arn
+output "secrets_kms_key_arn" {
+  description = "ARN of the KMS key used to encrypt secrets"
+  value       = aws_kms_key.secrets.arn
 }
 
-output "instruction_prompt_secret_arn" {
-  description = "ARN of the Secrets Manager secret for instruction prompt"
-  value       = aws_secretsmanager_secret.instruction_prompt.arn
+# Output for client environment configuration
+output "for_client_environment" {
+  description = "Values to use in client environment terraform.tfvars"
+  value = {
+    ecr_repository_url        = aws_ecr_repository.agent.repository_url
+    agent_prompts_secret_arn  = aws_secretsmanager_secret.agent_prompts.arn
+    secrets_kms_key_arn       = aws_kms_key.secrets.arn
+    central_sns_topic_arn     = aws_sns_topic.security_alerts.arn
+    central_audit_bucket_arn  = aws_s3_bucket.audit_logs.arn
+    central_audit_bucket_name = aws_s3_bucket.audit_logs.id
+  }
 }

@@ -1,7 +1,7 @@
 # =============================================================================
 # CloudTrail for Audit
 # =============================================================================
-# Captura todos los intentos de acceso y los envia al bucket en cuenta central
+# Captures all access attempts and sends them to bucket in central account
 
 resource "aws_cloudtrail" "security_audit" {
   name                          = "${var.project_name}-security-audit"
@@ -13,21 +13,6 @@ resource "aws_cloudtrail" "security_audit" {
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
-    data_resource {
-      type   = "AWS::SSM::Parameter"
-      values = ["arn:aws:ssm:${local.region}:${local.client_account_id}:parameter/${var.project_name}/*"]
-    }
-  }
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::KMS::Key"
-      values = [aws_kms_key.prompt_encryption.arn]
-    }
   }
 
   tags = local.default_tags
@@ -37,28 +22,20 @@ resource "aws_cloudtrail" "security_audit" {
 # EventBridge Rules for Security Alerts
 # =============================================================================
 
-# Rule: Detect attempts to read SSM parameters
-resource "aws_cloudwatch_event_rule" "ssm_access_attempt" {
-  name        = "${var.project_name}-ssm-access-attempt"
-  description = "Detects attempts to read protected SSM parameters"
+# Rule: Detect ECS task definition changes
+resource "aws_cloudwatch_event_rule" "ecs_task_modified" {
+  name        = "${var.project_name}-ecs-task-modified"
+  description = "Detects modifications to ECS task definitions"
 
   event_pattern = jsonencode({
-    source      = ["aws.ssm"]
+    source      = ["aws.ecs"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
-      eventSource = ["ssm.amazonaws.com"]
-      eventName   = ["GetParameter", "GetParameters", "GetParameterHistory", "GetParametersByPath"]
+      eventSource = ["ecs.amazonaws.com"]
+      eventName   = ["RegisterTaskDefinition", "DeregisterTaskDefinition"]
       requestParameters = {
-        name = [{
-          prefix = "/${var.project_name}/"
-        }]
-      }
-      # Exclude the deployer role and bedrock service
-      userIdentity = {
-        arn = [{
-          "anything-but" = {
-            prefix = "arn:aws:iam::${local.client_account_id}:role/${var.project_name}-"
-          }
+        family = [{
+          prefix = "${var.project_name}-"
         }]
       }
     }
@@ -67,49 +44,20 @@ resource "aws_cloudwatch_event_rule" "ssm_access_attempt" {
   tags = local.default_tags
 }
 
-# Rule: Detect attempts to access KMS key
-resource "aws_cloudwatch_event_rule" "kms_access_attempt" {
-  name        = "${var.project_name}-kms-access-attempt"
-  description = "Detects attempts to access the protected KMS key"
+# Rule: Detect ECS service modifications
+resource "aws_cloudwatch_event_rule" "ecs_service_modified" {
+  name        = "${var.project_name}-ecs-service-modified"
+  description = "Detects modifications to ECS services"
 
   event_pattern = jsonencode({
-    source      = ["aws.kms"]
+    source      = ["aws.ecs"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
-      eventSource = ["kms.amazonaws.com"]
-      eventName   = ["Decrypt", "GetKeyPolicy", "PutKeyPolicy", "DescribeKey"]
-      resources = {
-        ARN = [aws_kms_key.prompt_encryption.arn]
-      }
-      userIdentity = {
-        arn = [{
-          "anything-but" = {
-            prefix = "arn:aws:iam::${local.client_account_id}:role/${var.project_name}-"
-          }
-        }]
-      }
-    }
-  })
-
-  tags = local.default_tags
-}
-
-# Rule: Detect attempts to read Bedrock Agent config
-resource "aws_cloudwatch_event_rule" "bedrock_access_attempt" {
-  name        = "${var.project_name}-bedrock-access-attempt"
-  description = "Detects attempts to read Bedrock Agent configuration"
-
-  event_pattern = jsonencode({
-    source      = ["aws.bedrock"]
-    detail-type = ["AWS API Call via CloudTrail"]
-    detail = {
-      eventSource = ["bedrock.amazonaws.com"]
-      eventName   = ["GetAgent", "GetAgentVersion", "GetPrompt", "ListPrompts"]
-      userIdentity = {
-        arn = [{
-          "anything-but" = {
-            prefix = "arn:aws:iam::${local.client_account_id}:role/${var.project_name}-"
-          }
+      eventSource = ["ecs.amazonaws.com"]
+      eventName   = ["UpdateService", "DeleteService", "CreateService"]
+      requestParameters = {
+        cluster = [{
+          suffix = "${var.project_name}-agent"
         }]
       }
     }
@@ -147,91 +95,88 @@ resource "aws_cloudwatch_event_rule" "iam_change_attempt" {
   tags = local.default_tags
 }
 
+# Rule: Detect attempts to access Secrets Manager from client account
+resource "aws_cloudwatch_event_rule" "secrets_access_attempt" {
+  name        = "${var.project_name}-secrets-access-attempt"
+  description = "Detects attempts to access cross-account secrets"
+
+  event_pattern = jsonencode({
+    source      = ["aws.secretsmanager"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["secretsmanager.amazonaws.com"]
+      eventName   = ["GetSecretValue", "DescribeSecret"]
+      # Alert on any attempt that is not from the ECS task role
+      userIdentity = {
+        arn = [{
+          "anything-but" = {
+            suffix = "${var.project_name}-ecs-task"
+          }
+        }]
+      }
+    }
+  })
+
+  tags = local.default_tags
+}
+
 # =============================================================================
 # EventBridge Targets - Send to Central SNS
 # =============================================================================
 
-resource "aws_cloudwatch_event_target" "ssm_to_sns" {
-  rule      = aws_cloudwatch_event_rule.ssm_access_attempt.name
+resource "aws_cloudwatch_event_target" "ecs_task_to_sns" {
+  rule      = aws_cloudwatch_event_rule.ecs_task_modified.name
   target_id = "send-to-central-sns"
   arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
   input_transformer {
     input_paths = {
-      account   = "$.account"
-      time      = "$.time"
-      user      = "$.detail.userIdentity.arn"
-      action    = "$.detail.eventName"
-      resource  = "$.detail.requestParameters.name"
-      errorCode = "$.detail.errorCode"
+      account  = "$.account"
+      time     = "$.time"
+      user     = "$.detail.userIdentity.arn"
+      action   = "$.detail.eventName"
+      family   = "$.detail.requestParameters.family"
     }
     input_template = <<EOF
 {
-  "alert_type": "SSM_ACCESS_ATTEMPT",
-  "severity": "HIGH",
-  "account": <account>,
-  "timestamp": <time>,
-  "user": <user>,
-  "action": <action>,
-  "resource": <resource>,
-  "result": <errorCode>,
-  "message": "Unauthorized attempt to access protected SSM parameter"
-}
-EOF
-  }
-}
-
-resource "aws_cloudwatch_event_target" "kms_to_sns" {
-  rule      = aws_cloudwatch_event_rule.kms_access_attempt.name
-  target_id = "send-to-central-sns"
-  arn       = var.central_sns_topic_arn
-
-  input_transformer {
-    input_paths = {
-      account   = "$.account"
-      time      = "$.time"
-      user      = "$.detail.userIdentity.arn"
-      action    = "$.detail.eventName"
-      errorCode = "$.detail.errorCode"
-    }
-    input_template = <<EOF
-{
-  "alert_type": "KMS_ACCESS_ATTEMPT",
+  "alert_type": "ECS_TASK_MODIFIED",
   "severity": "CRITICAL",
   "account": <account>,
   "timestamp": <time>,
   "user": <user>,
   "action": <action>,
-  "result": <errorCode>,
-  "message": "Unauthorized attempt to access protected KMS key"
+  "task_family": <family>,
+  "message": "ECS task definition was modified - potential tampering detected"
 }
 EOF
   }
 }
 
-resource "aws_cloudwatch_event_target" "bedrock_to_sns" {
-  rule      = aws_cloudwatch_event_rule.bedrock_access_attempt.name
+resource "aws_cloudwatch_event_target" "ecs_service_to_sns" {
+  rule      = aws_cloudwatch_event_rule.ecs_service_modified.name
   target_id = "send-to-central-sns"
   arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
   input_transformer {
     input_paths = {
-      account   = "$.account"
-      time      = "$.time"
-      user      = "$.detail.userIdentity.arn"
-      action    = "$.detail.eventName"
-      errorCode = "$.detail.errorCode"
+      account = "$.account"
+      time    = "$.time"
+      user    = "$.detail.userIdentity.arn"
+      action  = "$.detail.eventName"
+      cluster = "$.detail.requestParameters.cluster"
     }
     input_template = <<EOF
 {
-  "alert_type": "BEDROCK_ACCESS_ATTEMPT",
-  "severity": "HIGH",
+  "alert_type": "ECS_SERVICE_MODIFIED",
+  "severity": "CRITICAL",
   "account": <account>,
   "timestamp": <time>,
   "user": <user>,
   "action": <action>,
-  "result": <errorCode>,
-  "message": "Unauthorized attempt to access Bedrock Agent configuration"
+  "cluster": <cluster>,
+  "message": "ECS service was modified - potential tampering detected"
 }
 EOF
   }
@@ -241,6 +186,7 @@ resource "aws_cloudwatch_event_target" "iam_to_sns" {
   rule      = aws_cloudwatch_event_rule.iam_change_attempt.name
   target_id = "send-to-central-sns"
   arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
   input_transformer {
     input_paths = {
@@ -265,41 +211,82 @@ EOF
   }
 }
 
+resource "aws_cloudwatch_event_target" "secrets_to_sns" {
+  rule      = aws_cloudwatch_event_rule.secrets_access_attempt.name
+  target_id = "send-to-central-sns"
+  arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
+
+  input_transformer {
+    input_paths = {
+      account   = "$.account"
+      time      = "$.time"
+      user      = "$.detail.userIdentity.arn"
+      action    = "$.detail.eventName"
+      errorCode = "$.detail.errorCode"
+    }
+    input_template = <<EOF
+{
+  "alert_type": "SECRETS_ACCESS_ATTEMPT",
+  "severity": "CRITICAL",
+  "account": <account>,
+  "timestamp": <time>,
+  "user": <user>,
+  "action": <action>,
+  "result": <errorCode>,
+  "message": "Unauthorized attempt to access agent secrets"
+}
+EOF
+  }
+}
+
 # =============================================================================
-# IAM Role for EventBridge to publish to SNS cross-account
+# Rule: Detect ECS Exec attempts (shell access to container)
 # =============================================================================
 
-resource "aws_iam_role" "eventbridge_to_sns" {
-  name = "${var.project_name}-eventbridge-to-sns"
+resource "aws_cloudwatch_event_rule" "ecs_exec_attempt" {
+  name        = "${var.project_name}-ecs-exec-attempt"
+  description = "Detects attempts to execute commands in ECS containers"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
+  event_pattern = jsonencode({
+    source      = ["aws.ecs"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["ecs.amazonaws.com"]
+      eventName   = ["ExecuteCommand"]
+    }
   })
 
   tags = local.default_tags
 }
 
-resource "aws_iam_role_policy" "eventbridge_to_sns" {
-  name = "${var.project_name}-eventbridge-to-sns-policy"
-  role = aws_iam_role.eventbridge_to_sns.id
+resource "aws_cloudwatch_event_target" "ecs_exec_to_sns" {
+  rule      = aws_cloudwatch_event_rule.ecs_exec_attempt.name
+  target_id = "send-to-central-sns"
+  arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = "sns:Publish"
-        Resource = var.central_sns_topic_arn
-      }
-    ]
-  })
+  input_transformer {
+    input_paths = {
+      account   = "$.account"
+      time      = "$.time"
+      user      = "$.detail.userIdentity.arn"
+      cluster   = "$.detail.requestParameters.cluster"
+      task      = "$.detail.requestParameters.task"
+      errorCode = "$.detail.errorCode"
+    }
+    input_template = <<EOF
+{
+  "alert_type": "ECS_EXEC_ATTEMPT",
+  "severity": "CRITICAL",
+  "account": <account>,
+  "timestamp": <time>,
+  "user": <user>,
+  "cluster": <cluster>,
+  "task": <task>,
+  "result": <errorCode>,
+  "message": "ALERT: Attempt to execute shell command in protected container"
+}
+EOF
+  }
 }

@@ -8,42 +8,56 @@ variable "central_account_id" {
   type        = string
 }
 
-variable "agent_name" {
-  description = "Name of the Bedrock Agent"
+# ECR Repository (from central account)
+variable "ecr_repository_url" {
+  description = "URL of the ECR repository in central account"
   type        = string
 }
 
-variable "agent_description" {
-  description = "Description of the Bedrock Agent"
+variable "container_image_tag" {
+  description = "Tag of the container image to deploy"
   type        = string
-  default     = "Protected Bedrock Agent"
+  default     = "latest"
 }
 
+# Secrets (from central account)
+variable "agent_prompts_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing agent prompts (in central account)"
+  type        = string
+}
+
+variable "secrets_kms_key_arn" {
+  description = "ARN of the KMS key used to encrypt the secrets (in central account)"
+  type        = string
+}
+
+# Model configuration
 variable "foundation_model" {
-  description = "Foundation model ID for the Bedrock Agent"
+  description = "Foundation model ID for Bedrock"
   type        = string
   default     = "amazon.nova-lite-v1:0"
 }
 
-variable "system_prompt" {
-  description = "System prompt for the Bedrock Agent (will be encrypted)"
-  type        = string
-  sensitive   = true
-}
-
-variable "instruction_prompt" {
-  description = "Instruction prompt for the Bedrock Agent (will be encrypted)"
-  type        = string
-  sensitive   = true
-}
-
-variable "idle_session_ttl_seconds" {
-  description = "Idle session TTL in seconds for the agent"
+# ECS Configuration
+variable "ecs_cpu" {
+  description = "CPU units for the ECS task (1024 = 1 vCPU)"
   type        = number
-  default     = 600
+  default     = 512
 }
 
-# Central account resources (outputs from central-account module)
+variable "ecs_memory" {
+  description = "Memory for the ECS task in MB"
+  type        = number
+  default     = 1024
+}
+
+variable "ecs_desired_count" {
+  description = "Desired number of ECS tasks"
+  type        = number
+  default     = 1
+}
+
+# Central account resources for alerts/audit
 variable "central_sns_topic_arn" {
   description = "ARN of the SNS topic in central account for security alerts"
   type        = string

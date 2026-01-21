@@ -1,45 +1,46 @@
-# =============================================================================
 # Client Account Configuration
-# =============================================================================
 # Copy this file to terraform.tfvars and fill in your values
+#
+# After deploying the central account, run:
+#   cd ../central && terraform output for_client_environment
+# to get the values below
 
-region        = "us-east-1"
-project_name  = "bedrock-protected"
-client_name   = "acme-corp"
+region             = "us-east-1"
+project_name       = "bedrock-protected"
+client_name        = "your-client-name"
+central_account_id = "REPLACE_WITH_CENTRAL_ACCOUNT_ID"
 
-# Central account ID (your admin account)
-central_account_id = "190045319446"
-
-# =============================================================================
-# Bedrock Agent Configuration
-# =============================================================================
-
-agent_name        = "acme-assistant"
-agent_description = "AI Assistant for ACME Corp - Protected"
-foundation_model  = "amazon.nova-lite-v1:0"
+# AWS Profile (optional - can also use AWS_PROFILE env var)
+# aws_profile = "your-client-account-profile"
 
 # =============================================================================
-# Prompts (SENSITIVE - DO NOT COMMIT)
+# From Central Account Outputs (terraform output for_client_environment)
 # =============================================================================
-# Option 1: Set directly (not recommended for production)
-# system_prompt      = "You are a helpful assistant..."
-# instruction_prompt = "Follow these instructions..."
 
-# Option 2: Use environment variables (recommended)
-# export TF_VAR_system_prompt="Your system prompt here"
-# export TF_VAR_instruction_prompt="Your instruction prompt here"
+# ECR repository URL for the agent container
+ecr_repository_url = "REPLACE_WITH_ECR_URL"
 
-# Option 3: Use a separate secrets file (gitignored)
-# Create a file called secrets.auto.tfvars with:
-# system_prompt      = "..."
-# instruction_prompt = "..."
+# Container image tag
+container_image_tag = "v1"
+
+# ARN of the Secrets Manager secret containing agent prompts
+agent_prompts_secret_arn = "REPLACE_WITH_SECRET_ARN"
+
+# ARN of the KMS key used to encrypt the secrets
+secrets_kms_key_arn = "REPLACE_WITH_KMS_KEY_ARN"
+
+# SNS topic for security alerts
+central_sns_topic_arn = "REPLACE_WITH_SNS_TOPIC_ARN"
+
+# S3 bucket for audit logs
+central_audit_bucket_arn  = "REPLACE_WITH_S3_BUCKET_ARN"
+central_audit_bucket_name = "REPLACE_WITH_S3_BUCKET_NAME"
 
 # =============================================================================
-# Central Account Resources
+# Optional ECS Configuration
 # =============================================================================
-# Get these values from the central environment outputs:
-# cd ../central && terraform output for_client_environment
 
-central_sns_topic_arn     = "arn:aws:sns:us-east-1:190045319446:bedrock-protected-security-alerts"
-central_audit_bucket_arn  = "arn:aws:s3:::bedrock-protected-audit-logs-190045319446"
-central_audit_bucket_name = "bedrock-protected-audit-logs-190045319446"
+# foundation_model  = "amazon.nova-lite-v1:0"
+# ecs_cpu           = 512
+# ecs_memory        = 1024
+# ecs_desired_count = 1

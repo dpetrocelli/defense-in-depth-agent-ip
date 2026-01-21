@@ -3,34 +3,34 @@ output "client_account_id" {
   value       = local.client_account_id
 }
 
-output "agent_id" {
-  description = "Bedrock Agent ID"
-  value       = aws_bedrockagent_agent.main.agent_id
+output "ecs_cluster_name" {
+  description = "ECS Cluster name"
+  value       = aws_ecs_cluster.agent.name
 }
 
-output "agent_arn" {
-  description = "Bedrock Agent ARN"
-  value       = aws_bedrockagent_agent.main.agent_arn
+output "ecs_cluster_arn" {
+  description = "ECS Cluster ARN"
+  value       = aws_ecs_cluster.agent.arn
 }
 
-output "agent_alias_id" {
-  description = "Bedrock Agent Alias ID"
-  value       = aws_bedrockagent_agent_alias.main.agent_alias_id
+output "ecs_service_name" {
+  description = "ECS Service name"
+  value       = aws_ecs_service.agent.name
 }
 
-output "agent_alias_arn" {
-  description = "Bedrock Agent Alias ARN"
-  value       = aws_bedrockagent_agent_alias.main.agent_alias_arn
+output "ecs_task_role_arn" {
+  description = "ARN of the ECS task role"
+  value       = aws_iam_role.ecs_task.arn
 }
 
-output "kms_key_arn" {
-  description = "ARN of the KMS key used for prompt encryption"
-  value       = aws_kms_key.prompt_encryption.arn
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.agent.dns_name
 }
 
-output "kms_key_id" {
-  description = "ID of the KMS key used for prompt encryption"
-  value       = aws_kms_key.prompt_encryption.key_id
+output "alb_url" {
+  description = "URL to access the agent API"
+  value       = "http://${aws_lb.agent.dns_name}"
 }
 
 output "deployer_role_arn" {
@@ -38,22 +38,7 @@ output "deployer_role_arn" {
   value       = aws_iam_role.deployer.arn
 }
 
-output "bedrock_agent_role_arn" {
-  description = "ARN of the Bedrock Agent execution role"
-  value       = aws_iam_role.bedrock_agent.arn
-}
-
-output "client_invoke_policy_arn" {
-  description = "ARN of the IAM policy that allows client to invoke the agent"
-  value       = aws_iam_policy.client_invoke_only.arn
-}
-
-output "client_deny_policy_arn" {
-  description = "ARN of the IAM policy that denies client access to protected resources"
-  value       = aws_iam_policy.client_deny_protected.arn
-}
-
-output "invoke_agent_command" {
-  description = "AWS CLI command to invoke the agent"
-  value       = "aws bedrock-agent-runtime invoke-agent --agent-id ${aws_bedrockagent_agent.main.agent_id} --agent-alias-id ${aws_bedrockagent_agent_alias.main.agent_alias_id} --session-id SESSION_ID --input-text 'YOUR_MESSAGE'"
+output "invoke_api_command" {
+  description = "Curl command to invoke the agent"
+  value       = "curl -X POST http://${aws_lb.agent.dns_name}/invoke -H 'Content-Type: application/json' -d '{\"message\": \"Hello\", \"session_id\": \"test-001\"}'"
 }

@@ -3,9 +3,14 @@ output "central_account_id" {
   value       = module.central_account.central_account_id
 }
 
-output "agent_admin_role_arn" {
-  description = "ARN of the IAM role for cross-account administration"
-  value       = module.central_account.agent_admin_role_arn
+output "ecr_repository_url" {
+  description = "URL of the ECR repository for the agent container"
+  value       = module.central_account.ecr_repository_url
+}
+
+output "agent_prompts_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing agent prompts"
+  value       = module.central_account.agent_prompts_secret_arn
 }
 
 output "audit_logs_bucket_name" {
@@ -23,13 +28,8 @@ output "security_alerts_topic_arn" {
   value       = module.central_account.security_alerts_topic_arn
 }
 
-# These values are needed for the client environment
+# These values are needed for the client environment terraform.tfvars
 output "for_client_environment" {
   description = "Values to pass to the client environment"
-  value = {
-    central_account_id        = module.central_account.central_account_id
-    central_sns_topic_arn     = module.central_account.security_alerts_topic_arn
-    central_audit_bucket_arn  = module.central_account.audit_logs_bucket_arn
-    central_audit_bucket_name = module.central_account.audit_logs_bucket_name
-  }
+  value       = module.central_account.for_client_environment
 }

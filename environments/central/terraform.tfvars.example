@@ -1,14 +1,15 @@
-# =============================================================================
 # Central Account Configuration
-# =============================================================================
 # Copy this file to terraform.tfvars and fill in your values
 
-region        = "us-east-1"
-project_name  = "bedrock-protected"
+region            = "us-east-1"
+project_name      = "bedrock-protected"
+client_account_id = "REPLACE_WITH_CLIENT_ACCOUNT_ID"
 
-# Client account ID (where the Bedrock Agent will be deployed)
-client_account_id = "875228160179"
+# AWS Profile (optional - can also use AWS_PROFILE env var)
+# aws_profile = "your-central-account-profile"
 
-# Security alerts (at least one is recommended)
-alert_email       = "security@yourcompany.com"
-slack_webhook_url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+# Optional: Email for security alerts
+alert_email = "security@yourcompany.com"
+
+# Optional: Slack webhook for security alerts
+# slack_webhook_url = "https://hooks.slack.com/services/xxx/yyy/zzz"

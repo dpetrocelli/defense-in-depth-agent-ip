@@ -27,6 +27,19 @@ variable "audit_log_retention_days" {
   default     = 365
 }
 
+variable "system_prompt" {
+  description = "System prompt for the AI agent (stored in Secrets Manager)"
+  type        = string
+  sensitive   = true
+}
+
+variable "instruction_prompt" {
+  description = "Instruction prompt for the AI agent (stored in Secrets Manager)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

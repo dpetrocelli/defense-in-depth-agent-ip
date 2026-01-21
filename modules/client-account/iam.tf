@@ -1,9 +1,10 @@
 # =============================================================================
-# IAM Role for Bedrock Agent
+# ECS Execution Role
 # =============================================================================
+# Used by ECS to pull images and write logs
 
-resource "aws_iam_role" "bedrock_agent" {
-  name = "${var.project_name}-bedrock-agent"
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -11,14 +12,9 @@ resource "aws_iam_role" "bedrock_agent" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "bedrock.amazonaws.com"
+          Service = "ecs-tasks.amazonaws.com"
         }
         Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = local.client_account_id
-          }
-        }
       }
     ]
   })
@@ -26,15 +22,74 @@ resource "aws_iam_role" "bedrock_agent" {
   tags = local.default_tags
 }
 
-resource "aws_iam_role_policy" "bedrock_agent" {
-  name = "${var.project_name}-bedrock-agent-policy"
-  role = aws_iam_role.bedrock_agent.id
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Allow pulling from cross-account ECR
+resource "aws_iam_role_policy" "ecs_execution_ecr" {
+  name = "${var.project_name}-ecs-execution-ecr"
+  role = aws_iam_role.ecs_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "InvokeFoundationModel"
+        Sid    = "AllowCrossAccountECR"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
+        ]
+        Resource = "arn:aws:ecr:${local.region}:${var.central_account_id}:repository/${var.project_name}-agent"
+      },
+      {
+        Sid    = "AllowECRAuth"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# ECS Task Role
+# =============================================================================
+# Used by the container to access AWS services
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${var.project_name}-ecs-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.default_tags
+}
+
+resource "aws_iam_role_policy" "ecs_task" {
+  name = "${var.project_name}-ecs-task-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "InvokeBedrock"
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
@@ -43,25 +98,21 @@ resource "aws_iam_role_policy" "bedrock_agent" {
         Resource = "arn:aws:bedrock:${local.region}::foundation-model/${var.foundation_model}"
       },
       {
-        Sid    = "DecryptPrompts"
+        Sid    = "ReadSecretsFromCentralAccount"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = var.agent_prompts_secret_arn
+      },
+      {
+        Sid    = "DecryptSecretsWithKMS"
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
-          "kms:GenerateDataKey*"
+          "kms:DescribeKey"
         ]
-        Resource = aws_kms_key.prompt_encryption.arn
-      },
-      {
-        Sid    = "ReadSSMParameters"
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:GetParameters"
-        ]
-        Resource = [
-          aws_ssm_parameter.system_prompt.arn,
-          aws_ssm_parameter.instruction_prompt.arn
-        ]
+        Resource = var.secrets_kms_key_arn
       }
     ]
   })
@@ -103,78 +154,55 @@ resource "aws_iam_role_policy" "deployer" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ManageBedrockAgent"
+        Sid    = "ManageECS"
         Effect = "Allow"
         Action = [
-          "bedrock:CreateAgent",
-          "bedrock:UpdateAgent",
-          "bedrock:DeleteAgent",
-          "bedrock:GetAgent",
-          "bedrock:PrepareAgent",
-          "bedrock:CreateAgentAlias",
-          "bedrock:UpdateAgentAlias",
-          "bedrock:DeleteAgentAlias",
-          "bedrock:GetAgentAlias",
-          "bedrock:ListAgentAliases"
+          "ecs:UpdateService",
+          "ecs:DescribeServices",
+          "ecs:DescribeTasks",
+          "ecs:ListTasks"
         ]
         Resource = "*"
-      },
-      {
-        Sid    = "ManageSSMParameters"
-        Effect = "Allow"
-        Action = [
-          "ssm:PutParameter",
-          "ssm:GetParameter",
-          "ssm:DeleteParameter"
-        ]
-        Resource = "arn:aws:ssm:${local.region}:${local.client_account_id}:parameter/${var.project_name}/*"
-      },
-      {
-        Sid    = "ManageKMS"
-        Effect = "Allow"
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = aws_kms_key.prompt_encryption.arn
-      },
-      {
-        Sid    = "PassRoleToBedrock"
-        Effect = "Allow"
-        Action = "iam:PassRole"
-        Resource = aws_iam_role.bedrock_agent.arn
         Condition = {
           StringEquals = {
-            "iam:PassedToService" = "bedrock.amazonaws.com"
+            "ecs:cluster" = "arn:aws:ecs:${local.region}:${local.client_account_id}:cluster/${var.project_name}-agent"
           }
         }
-      }
-    ]
-  })
-}
-
-# =============================================================================
-# IAM Policy for Client - RESTRICTIVE
-# =============================================================================
-# Esta policy se puede attachar a usuarios/roles del cliente
-# SOLO permite InvokeAgent, NADA más
-
-resource "aws_iam_policy" "client_invoke_only" {
-  name        = "${var.project_name}-client-invoke-only"
-  description = "Allows client to ONLY invoke the Bedrock Agent - no read access to prompts"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
+      },
       {
-        Sid    = "AllowInvokeAgentOnly"
+        Sid    = "PassRoleToECS"
         Effect = "Allow"
-        Action = [
-          "bedrock:InvokeAgent"
+        Action = "iam:PassRole"
+        Resource = [
+          aws_iam_role.ecs_execution.arn,
+          aws_iam_role.ecs_task.arn
         ]
-        Resource = "arn:aws:bedrock:${local.region}:${local.client_account_id}:agent-alias/${aws_bedrockagent_agent.main.agent_id}/*"
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "ecs-tasks.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# EventBridge Role for Cross-Account SNS
+# =============================================================================
+
+resource "aws_iam_role" "eventbridge_to_sns" {
+  name = "${var.project_name}-eventbridge-sns"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -182,70 +210,18 @@ resource "aws_iam_policy" "client_invoke_only" {
   tags = local.default_tags
 }
 
-# =============================================================================
-# IAM Policy - EXPLICIT DENY for Client
-# =============================================================================
-# Esta policy deniega explícitamente cualquier acceso a recursos protegidos
-# Se debe attachar a TODOS los usuarios/roles del cliente (excepto deployer)
-
-resource "aws_iam_policy" "client_deny_protected" {
-  name        = "${var.project_name}-client-deny-protected"
-  description = "Explicitly denies access to protected Bedrock resources"
+resource "aws_iam_role_policy" "eventbridge_to_sns" {
+  name = "${var.project_name}-eventbridge-sns-policy"
+  role = aws_iam_role.eventbridge_to_sns.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyGetAgent"
-        Effect = "Deny"
-        Action = [
-          "bedrock:GetAgent",
-          "bedrock:GetAgentVersion",
-          "bedrock:GetPrompt",
-          "bedrock:ListPrompts",
-          "bedrock:GetAgentAlias"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "aws:ResourceTag/Project" = var.project_name
-          }
-        }
-      },
-      {
-        Sid    = "DenySSMAccess"
-        Effect = "Deny"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:GetParameters",
-          "ssm:GetParameterHistory",
-          "ssm:GetParametersByPath"
-        ]
-        Resource = "arn:aws:ssm:${local.region}:${local.client_account_id}:parameter/${var.project_name}/*"
-      },
-      {
-        Sid    = "DenyKMSAccess"
-        Effect = "Deny"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:GetKeyPolicy",
-          "kms:GetKeyRotationStatus"
-        ]
-        Resource = aws_kms_key.prompt_encryption.arn
-      },
-      {
-        Sid    = "DenyCloudWatchLogsAccess"
-        Effect = "Deny"
-        Action = [
-          "logs:GetLogEvents",
-          "logs:FilterLogEvents",
-          "logs:GetLogRecord"
-        ]
-        Resource = "arn:aws:logs:${local.region}:${local.client_account_id}:log-group:/aws/bedrock/${var.project_name}/*"
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = var.central_sns_topic_arn
       }
     ]
   })
-
-  tags = local.default_tags
 }

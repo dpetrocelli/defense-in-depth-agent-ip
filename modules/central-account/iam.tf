@@ -58,23 +58,3 @@ resource "aws_iam_role_policy" "agent_admin_policy" {
   })
 }
 
-# =============================================================================
-# Secrets Manager - Source of Truth for Prompts
-# =============================================================================
-# Store original prompts here. These are then deployed encrypted to client account
-
-resource "aws_secretsmanager_secret" "system_prompt" {
-  name                    = "${var.project_name}/prompts/system-prompt"
-  description             = "System prompt for Bedrock Agent - Source of truth"
-  recovery_window_in_days = 30
-
-  tags = local.default_tags
-}
-
-resource "aws_secretsmanager_secret" "instruction_prompt" {
-  name                    = "${var.project_name}/prompts/instruction-prompt"
-  description             = "Instruction prompt for Bedrock Agent - Source of truth"
-  recovery_window_in_days = 30
-
-  tags = local.default_tags
-}

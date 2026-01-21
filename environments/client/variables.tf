@@ -4,6 +4,12 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "aws_profile" {
+  description = "AWS CLI profile to use (optional - can also use AWS_PROFILE env var)"
+  type        = string
+  default     = null
+}
+
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -13,30 +19,41 @@ variable "project_name" {
 variable "client_name" {
   description = "Name of the client (for tagging)"
   type        = string
-  default     = "demo-client"
 }
 
 variable "central_account_id" {
   description = "AWS Account ID of the central/admin account"
   type        = string
-  default     = "190045319446" # Central account
 }
 
 # =============================================================================
-# Bedrock Agent Configuration
+# Container Configuration (from central account)
 # =============================================================================
 
-variable "agent_name" {
-  description = "Name of the Bedrock Agent"
+variable "ecr_repository_url" {
+  description = "URL of the ECR repository in central account"
   type        = string
-  default     = "protected-agent"
 }
 
-variable "agent_description" {
-  description = "Description of the Bedrock Agent"
+variable "container_image_tag" {
+  description = "Tag of the container image to deploy"
   type        = string
-  default     = "Protected Bedrock Agent with encrypted prompts"
+  default     = "latest"
 }
+
+variable "agent_prompts_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing agent prompts (in central account)"
+  type        = string
+}
+
+variable "secrets_kms_key_arn" {
+  description = "ARN of the KMS key used to encrypt the secrets (in central account)"
+  type        = string
+}
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
 
 variable "foundation_model" {
   description = "Foundation model ID (using Nova Lite)"
@@ -45,21 +62,25 @@ variable "foundation_model" {
 }
 
 # =============================================================================
-# Prompts (SENSITIVE)
+# ECS Configuration
 # =============================================================================
 
-variable "system_prompt" {
-  description = "System prompt for the agent (will be encrypted)"
-  type        = string
-  sensitive   = true
-  default     = ""
+variable "ecs_cpu" {
+  description = "CPU units for the ECS task (1024 = 1 vCPU)"
+  type        = number
+  default     = 512
 }
 
-variable "instruction_prompt" {
-  description = "Instruction prompt for the agent (will be encrypted)"
-  type        = string
-  sensitive   = true
-  default     = ""
+variable "ecs_memory" {
+  description = "Memory for the ECS task in MB"
+  type        = number
+  default     = 1024
+}
+
+variable "ecs_desired_count" {
+  description = "Desired number of ECS tasks"
+  type        = number
+  default     = 1
 }
 
 # =============================================================================

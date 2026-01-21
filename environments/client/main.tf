@@ -1,8 +1,11 @@
 # =============================================================================
 # Client Account Environment
 # =============================================================================
-# Account: 875228160179 (AdministratorAccess-875228160179)
-# Purpose: Client account - hosts the Bedrock Agent, client uses but cannot see prompts
+# Purpose: Client account - hosts ECS Fargate running the Strands agent
+#
+# Before running:
+#   export AWS_PROFILE=your-client-account-profile
+#   # OR set aws_profile in terraform.tfvars
 
 terraform {
   required_version = ">= 1.0"
@@ -26,7 +29,7 @@ terraform {
 
 provider "aws" {
   region  = var.region
-  profile = "AdministratorAccess-875228160179"
+  profile = var.aws_profile
 
   default_tags {
     tags = {
@@ -43,14 +46,21 @@ module "client_account" {
   project_name       = var.project_name
   central_account_id = var.central_account_id
 
-  # Bedrock Agent config
-  agent_name         = var.agent_name
-  agent_description  = var.agent_description
-  foundation_model   = var.foundation_model
+  # Container image (from central account ECR)
+  ecr_repository_url  = var.ecr_repository_url
+  container_image_tag = var.container_image_tag
 
-  # Prompts (sensitive - will be encrypted)
-  system_prompt      = var.system_prompt
-  instruction_prompt = var.instruction_prompt
+  # Prompts secret (from central account Secrets Manager)
+  agent_prompts_secret_arn = var.agent_prompts_secret_arn
+  secrets_kms_key_arn      = var.secrets_kms_key_arn
+
+  # Model configuration
+  foundation_model = var.foundation_model
+
+  # ECS configuration
+  ecs_cpu           = var.ecs_cpu
+  ecs_memory        = var.ecs_memory
+  ecs_desired_count = var.ecs_desired_count
 
   # Central account resources (from central environment outputs)
   central_sns_topic_arn     = var.central_sns_topic_arn

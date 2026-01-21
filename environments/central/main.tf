@@ -1,8 +1,11 @@
 # =============================================================================
 # Central Account Environment
 # =============================================================================
-# Account: 190045319446 (AdministratorAccess-190045319446)
-# Purpose: Admin account - manages agents, receives alerts, stores audit logs
+# Purpose: Admin account - stores prompts in Secrets Manager, ECR for container images
+#
+# Before running:
+#   export AWS_PROFILE=your-central-account-profile
+#   # OR set aws_profile in terraform.tfvars
 
 terraform {
   required_version = ">= 1.0"
@@ -26,7 +29,7 @@ terraform {
 
 provider "aws" {
   region  = var.region
-  profile = "AdministratorAccess-190045319446"
+  profile = var.aws_profile
 
   default_tags {
     tags = {
@@ -37,6 +40,12 @@ provider "aws" {
   }
 }
 
+locals {
+  # Load prompts from files
+  system_prompt      = file("${path.module}/prompts/system.txt")
+  instruction_prompt = file("${path.module}/prompts/instruction.txt")
+}
+
 module "central_account" {
   source = "../../modules/central-account"
 
@@ -44,6 +53,10 @@ module "central_account" {
   client_account_id = var.client_account_id
   alert_email       = var.alert_email
   slack_webhook_url = var.slack_webhook_url
+
+  # Prompts (stored in Secrets Manager, fetched by container at runtime)
+  system_prompt      = local.system_prompt
+  instruction_prompt = local.instruction_prompt
 
   tags = {
     Environment = "central"

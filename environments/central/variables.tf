@@ -4,6 +4,12 @@ variable "region" {
   default     = "us-east-1"
 }
 
+variable "aws_profile" {
+  description = "AWS CLI profile to use (optional - can also use AWS_PROFILE env var)"
+  type        = string
+  default     = null
+}
+
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -13,7 +19,6 @@ variable "project_name" {
 variable "client_account_id" {
   description = "AWS Account ID of the client"
   type        = string
-  default     = "875228160179" # Client account
 }
 
 variable "alert_email" {
