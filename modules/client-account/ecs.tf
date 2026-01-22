@@ -88,7 +88,7 @@ resource "aws_ecs_task_definition" "agent" {
       environment = [
         {
           name  = "PROMPT_SECRET_ARN"
-          value = var.agent_prompts_secret_arn
+          value = var.use_gatekeeper ? "" : var.agent_prompts_secret_arn
         },
         {
           name  = "MODEL_ID"
@@ -97,6 +97,22 @@ resource "aws_ecs_task_definition" "agent" {
         {
           name  = "AWS_REGION"
           value = local.region
+        },
+        {
+          name  = "API_KEY"
+          value = var.api_key
+        },
+        {
+          name  = "GATEKEEPER_URL"
+          value = var.gatekeeper_url
+        },
+        {
+          name  = "USE_GATEKEEPER"
+          value = tostring(var.use_gatekeeper)
+        },
+        {
+          name  = "ENABLE_RESPONSE_FILTER"
+          value = "true"
         }
       ]
 

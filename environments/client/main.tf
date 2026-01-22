@@ -67,6 +67,13 @@ module "client_account" {
   central_audit_bucket_arn  = var.central_audit_bucket_arn
   central_audit_bucket_name = var.central_audit_bucket_name
 
+  # API Security
+  api_key = var.api_key
+
+  # Gatekeeper (secure prompt delivery)
+  gatekeeper_url = var.gatekeeper_url
+  use_gatekeeper = var.use_gatekeeper
+
   tags = {
     Environment = "client"
     ClientName  = var.client_name

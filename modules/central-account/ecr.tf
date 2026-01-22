@@ -18,7 +18,9 @@ resource "aws_ecr_repository" "agent" {
   tags = local.default_tags
 }
 
-# Allow client account to pull images
+# Allow ONLY the ECS execution role from client account to pull images
+# SECURITY: Restricted to specific role ARN to prevent client admins from
+# pulling the image and inspecting docker history to extract signing key
 resource "aws_ecr_repository_policy" "agent" {
   repository = aws_ecr_repository.agent.name
 
@@ -26,10 +28,10 @@ resource "aws_ecr_repository_policy" "agent" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowClientAccountPull"
+        Sid    = "AllowECSExecutionRolePull"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.client_account_id}:root"
+          AWS = "arn:aws:iam::${var.client_account_id}:role/${var.project_name}-ecs-execution"
         }
         Action = [
           "ecr:GetDownloadUrlForLayer",

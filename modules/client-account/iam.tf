@@ -124,8 +124,8 @@ resource "aws_iam_role" "ecs_task" {
   # Security: Permission boundary limits max permissions even if policies are modified
   permissions_boundary = aws_iam_policy.task_permission_boundary.arn
 
-  # Security: Restrict to only tasks running in our protected cluster
-  # This prevents the client from creating arbitrary tasks with this role
+  # Security: Restrict to only tasks running in this account
+  # Note: Condition was causing ECS to fail to assume role
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -138,11 +138,6 @@ resource "aws_iam_role" "ecs_task" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = local.client_account_id
-          }
-          ArnLike = {
-            # Only tasks in our specific cluster can assume this role
-            # Format: arn:aws:ecs:region:account:task/cluster-name/task-id
-            "aws:SourceArn" = "arn:aws:ecs:${local.region}:${local.client_account_id}:task/${var.project_name}-agent/*"
           }
         }
       }

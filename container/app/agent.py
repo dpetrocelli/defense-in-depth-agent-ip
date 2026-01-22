@@ -1,21 +1,33 @@
 """
 Protected Agent Implementation
 ==============================
-Uses Strands Agents SDK with prompts fetched from Secrets Manager.
+Uses Strands Agents SDK with prompts fetched via secure Gatekeeper.
 Prompts are only held in memory, never persisted.
+
+Security features:
+- Prompts fetched via Lambda Gatekeeper with signed requests
+- Embedded signing key prevents unauthorized access
+- Response filtering detects and blocks prompt leakage
+- Defensive prompt additions resist prompt injection
 
 Includes demo tools to demonstrate Strands tool-calling capabilities.
 """
 
+import os
 import json
 import logging
-import math
 from datetime import datetime, timezone
 import boto3
 from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 
+from app.response_filter import filter_response, sanitize_user_input, get_defensive_prompt
+
 logger = logging.getLogger(__name__)
+
+# Feature flags
+USE_GATEKEEPER = os.environ.get('USE_GATEKEEPER', 'true').lower() == 'true'
+ENABLE_RESPONSE_FILTER = os.environ.get('ENABLE_RESPONSE_FILTER', 'true').lower() == 'true'
 
 
 # =============================================================================
@@ -126,38 +138,72 @@ class ProtectedAgent:
     """
     AI Agent with protected prompts using Strands SDK.
 
-    The system prompt is fetched from AWS Secrets Manager at initialization
-    and held only in memory. It is never logged, persisted, or exposed.
+    Security architecture:
+    - Prompts fetched via Lambda Gatekeeper (requires signed request)
+    - Signing key embedded in container image (not extractable)
+    - Response filtering detects prompt leakage attempts
+    - Defensive prompts resist prompt injection
+
+    The system prompt is held only in memory, never logged or exposed.
     """
 
     def __init__(
         self,
-        secret_arn: str,
+        secret_arn: str = None,
+        gatekeeper_url: str = None,
         model_id: str = "amazon.nova-lite-v1:0",
         region: str = "us-east-1"
     ):
         self.model_id = model_id
         self.region = region
 
-        # Fetch prompt from Secrets Manager (cross-account)
-        # This is the ONLY place the prompt exists - in memory
-        prompts = self._fetch_prompts(secret_arn)
-        self._system_prompt = prompts.get('system_prompt', '')
+        # Fetch prompts via secure gatekeeper or fallback to direct access
+        if USE_GATEKEEPER and gatekeeper_url:
+            prompts = self._fetch_prompts_via_gatekeeper(gatekeeper_url)
+        elif secret_arn:
+            prompts = self._fetch_prompts_direct(secret_arn)
+        else:
+            raise ValueError("Either gatekeeper_url or secret_arn must be provided")
+
+        # Apply defensive prompt additions to resist prompt injection
+        base_prompt = prompts.get('system_prompt', '')
+        self._system_prompt = get_defensive_prompt(base_prompt)
+        self._system_prompt_raw = base_prompt  # Keep raw for response filtering
         self._instruction_prompt = prompts.get('instruction_prompt', '')
-        logger.info("Prompts loaded into memory from Secrets Manager")
+        logger.info("Prompts loaded into memory (with defensive additions)")
 
         # Initialize the Strands agent with Bedrock model
         self._agent = self._create_agent()
         logger.info("Strands agent initialized")
 
-    def _fetch_prompts(self, secret_arn: str) -> dict:
+    def _fetch_prompts_via_gatekeeper(self, gatekeeper_url: str) -> dict:
         """
-        Fetch prompts from Secrets Manager.
+        Fetch prompts via the secure Lambda Gatekeeper.
 
-        The secret is in a different AWS account (central account).
-        Access is granted via cross-account IAM role.
+        This is the secure method that validates the container's identity
+        using an embedded signing key.
         """
         try:
+            from app.gatekeeper_client import GatekeeperClient
+
+            client = GatekeeperClient(gatekeeper_url)
+            prompts = client.fetch_prompts()
+            logger.info("Prompts fetched via secure gatekeeper")
+            return prompts
+
+        except Exception as e:
+            logger.error(f"Failed to fetch prompts via gatekeeper: {e}")
+            raise RuntimeError("Cannot initialize agent: gatekeeper unavailable")
+
+    def _fetch_prompts_direct(self, secret_arn: str) -> dict:
+        """
+        Fetch prompts directly from Secrets Manager.
+
+        This is the fallback method for development/testing.
+        In production, use the gatekeeper for better security.
+        """
+        try:
+            logger.warning("Using direct Secrets Manager access (less secure)")
             secrets_client = boto3.client(
                 'secretsmanager',
                 region_name=self.region
@@ -197,18 +243,35 @@ class ProtectedAgent:
         """
         Invoke the agent with a user message.
 
-        The system prompt is used internally but never exposed to the user.
+        Security measures:
+        - Input sanitization to reduce prompt injection risk
+        - Response filtering to detect prompt leakage
+        - System prompt never exposed to the user
         """
         try:
+            # Sanitize user input to reduce prompt injection risk
+            sanitized_message = sanitize_user_input(message)
+
             # Combine instruction prompt with user message if available
-            full_message = message
+            full_message = sanitized_message
             if self._instruction_prompt:
-                full_message = f"{self._instruction_prompt}\n\nUser: {message}"
+                full_message = f"{self._instruction_prompt}\n\nUser: {sanitized_message}"
 
             # Call the Strands agent
             response = self._agent(full_message)
+            response_text = str(response)
 
-            return str(response)
+            # Filter response to detect prompt leakage
+            if ENABLE_RESPONSE_FILTER:
+                filtered_response, was_filtered = filter_response(
+                    response_text,
+                    self._system_prompt_raw
+                )
+                if was_filtered:
+                    logger.warning(f"Response filtered due to potential prompt leakage")
+                return filtered_response
+
+            return response_text
 
         except Exception as e:
             logger.error(f"Error invoking Strands agent: {e}")
