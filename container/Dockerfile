@@ -15,7 +15,7 @@ ARG SIGNING_KEY=""
 # This command will NOT appear in the final image's history
 RUN mkdir -p /secrets && \
     echo "${SIGNING_KEY}" > /secrets/.signing_key && \
-    chmod 400 /secrets/.signing_key
+    chmod 444 /secrets/.signing_key
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - AWS Lambda Python base image

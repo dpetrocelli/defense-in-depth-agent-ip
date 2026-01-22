@@ -15,11 +15,6 @@ resource "aws_iam_role" "lambda_execution" {
           Service = "lambda.amazonaws.com"
         }
         Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = local.client_account_id
-          }
-        }
       }
     ]
   })

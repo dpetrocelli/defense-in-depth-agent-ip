@@ -24,13 +24,12 @@ resource "aws_lambda_function" "agent" {
   # Environment variables
   environment {
     variables = {
-      PROMPT_SECRET_ARN       = var.use_gatekeeper ? "" : var.agent_prompts_secret_arn
-      MODEL_ID                = var.foundation_model
-      AWS_LAMBDA_EXEC_WRAPPER = "/opt/bootstrap"
-      GATEKEEPER_URL          = var.gatekeeper_url
-      USE_GATEKEEPER          = tostring(var.use_gatekeeper)
-      ENABLE_RESPONSE_FILTER  = "true"
-      API_KEY                 = var.api_key
+      PROMPT_SECRET_ARN      = var.use_gatekeeper ? "" : var.agent_prompts_secret_arn
+      MODEL_ID               = var.foundation_model
+      GATEKEEPER_URL         = var.gatekeeper_url
+      USE_GATEKEEPER         = tostring(var.use_gatekeeper)
+      ENABLE_RESPONSE_FILTER = "true"
+      API_KEY                = var.api_key
     }
   }
 
@@ -113,6 +112,25 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.agent.id
   name        = "$default"
   auto_deploy = true
+
+  # ==========================================================================
+  # RATE LIMITING - Default throttling for all routes
+  # ==========================================================================
+  # rate_limit: Steady-state requests per second
+  # burst_limit: Maximum concurrent requests (spike handling)
+  default_route_settings {
+    throttling_rate_limit  = var.api_rate_limit   # requests per second
+    throttling_burst_limit = var.api_burst_limit  # max concurrent requests
+  }
+
+  # ==========================================================================
+  # ROUTE-SPECIFIC THROTTLING - More restrictive for /invoke
+  # ==========================================================================
+  route_settings {
+    route_key              = "POST /invoke"
+    throttling_rate_limit  = var.invoke_rate_limit   # Lower limit for expensive endpoint
+    throttling_burst_limit = var.invoke_burst_limit
+  }
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn

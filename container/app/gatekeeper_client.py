@@ -17,7 +17,12 @@ import boto3
 logger = logging.getLogger(__name__)
 
 # Path to the signing key file (embedded in container image at build time)
-SIGNING_KEY_PATH = "/app/.signing_key"
+# For Lambda containers: /var/task/.signing_key
+# For ECS containers: /app/.signing_key
+SIGNING_KEY_PATHS = [
+    "/var/task/.signing_key",  # Lambda
+    "/app/.signing_key",       # ECS/local
+]
 
 
 class GatekeeperClient:
@@ -36,12 +41,13 @@ class GatekeeperClient:
     def _load_signing_key(self) -> str:
         """Load the signing key from the embedded file."""
         try:
-            # First try file (production - embedded in image)
-            if os.path.exists(SIGNING_KEY_PATH):
-                with open(SIGNING_KEY_PATH, 'r') as f:
-                    key = f.read().strip()
-                    logger.info("Signing key loaded from embedded file")
-                    return key
+            # Try file paths (production - embedded in image)
+            for path in SIGNING_KEY_PATHS:
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        key = f.read().strip()
+                        logger.info(f"Signing key loaded from: {path}")
+                        return key
 
             # Fallback to environment variable (for local development only)
             env_key = os.environ.get('GATEKEEPER_SIGNING_KEY', '')

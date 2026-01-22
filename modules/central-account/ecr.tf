@@ -18,11 +18,12 @@ resource "aws_ecr_repository" "agent" {
   tags = local.default_tags
 }
 
-# Allow ONLY Lambda service from client accounts to pull images
-# SECURITY: Lambda service principal with source account condition
+# Allow Lambda from client accounts to pull images
+# SECURITY:
+# - Lambda service principal for function creation/updates
+# - Lambda execution roles for runtime image pulls
 # - Client admins CANNOT pull the image directly (no ECR access)
 # - Client admins CANNOT download Lambda container code (not exposed like zip)
-# - Only Lambda service can pull during deployment
 resource "aws_ecr_repository_policy" "agent" {
   repository = aws_ecr_repository.agent.name
 
@@ -45,6 +46,18 @@ resource "aws_ecr_repository_policy" "agent" {
             "aws:SourceAccount" = var.client_account_ids
           }
         }
+      },
+      {
+        Sid    = "AllowLambdaExecutionRolePull"
+        Effect = "Allow"
+        Principal = {
+          AWS = [for account in var.client_account_ids : "arn:aws:iam::${account}:role/${var.project_name}-lambda-execution"]
+        }
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
+        ]
       }
     ]
   })
