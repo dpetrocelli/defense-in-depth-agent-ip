@@ -3,34 +3,29 @@ output "client_account_id" {
   value       = local.client_account_id
 }
 
-output "ecs_cluster_name" {
-  description = "ECS Cluster name"
-  value       = aws_ecs_cluster.agent.name
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = aws_lambda_function.agent.function_name
 }
 
-output "ecs_cluster_arn" {
-  description = "ECS Cluster ARN"
-  value       = aws_ecs_cluster.agent.arn
+output "lambda_function_arn" {
+  description = "Lambda function ARN"
+  value       = aws_lambda_function.agent.arn
 }
 
-output "ecs_service_name" {
-  description = "ECS Service name"
-  value       = aws_ecs_service.agent.name
+output "lambda_role_arn" {
+  description = "ARN of the Lambda execution role"
+  value       = aws_iam_role.lambda_execution.arn
 }
 
-output "ecs_task_role_arn" {
-  description = "ARN of the ECS task role"
-  value       = aws_iam_role.ecs_task.arn
+output "api_gateway_id" {
+  description = "API Gateway HTTP API ID"
+  value       = aws_apigatewayv2_api.agent.id
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.agent.dns_name
-}
-
-output "alb_url" {
+output "api_gateway_url" {
   description = "URL to access the agent API"
-  value       = "http://${aws_lb.agent.dns_name}"
+  value       = aws_apigatewayv2_stage.default.invoke_url
 }
 
 output "deployer_role_arn" {
@@ -40,5 +35,5 @@ output "deployer_role_arn" {
 
 output "invoke_api_command" {
   description = "Curl command to invoke the agent"
-  value       = "curl -X POST http://${aws_lb.agent.dns_name}/invoke -H 'Content-Type: application/json' -d '{\"message\": \"Hello\", \"session_id\": \"test-001\"}'"
+  value       = "curl -X POST ${aws_apigatewayv2_stage.default.invoke_url}/invoke -H 'Content-Type: application/json' -d '{\"message\": \"Hello\", \"session_id\": \"test-001\"}'"
 }

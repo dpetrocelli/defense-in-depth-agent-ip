@@ -26,7 +26,7 @@ resource "aws_sns_topic_policy" "security_alerts" {
         Resource = aws_sns_topic.security_alerts.arn
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.client_account_id
+            "aws:SourceAccount" = var.client_account_ids
           }
         }
       },

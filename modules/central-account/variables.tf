@@ -3,9 +3,9 @@ variable "project_name" {
   type        = string
 }
 
-variable "client_account_id" {
-  description = "AWS Account ID of the client where the Bedrock Agent will be deployed"
-  type        = string
+variable "client_account_ids" {
+  description = "AWS Account IDs of the clients where the Bedrock Agent will be deployed"
+  type        = list(string)
 }
 
 variable "alert_email" {

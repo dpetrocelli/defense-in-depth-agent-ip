@@ -17,13 +17,13 @@ Deploy AI agents in customer AWS accounts while keeping your prompts (intellectu
 │  ✓ Container image in ECR                                       │
 │  ✓ Audit logs in S3, alerts via SNS                            │
 └─────────────────────────────────────────────────────────────────┘
-                              │ Only ECS task role can read
+                              │ Only Lambda can pull image
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  CLIENT ACCOUNT                                                 │
-│  ✓ ECS Fargate + ALB                                           │
+│  ✓ Lambda + API Gateway (scales to 0)                          │
 │  ✓ CloudTrail + EventBridge (tampering detection)              │
-│  ✗ Cannot read prompts, cannot decrypt secrets                 │
+│  ✗ Cannot read prompts, cannot pull image, cannot see code     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -31,9 +31,10 @@ Deploy AI agents in customer AWS accounts while keeping your prompts (intellectu
 
 | What | Where | Who Can See |
 |------|-------|-------------|
-| Prompts | Secrets Manager (your account) | Only ECS task role |
-| KMS Key | KMS (your account) | Only ECS task role |
-| Container | ECR (your account) | Both (pull only) |
+| Prompts | Secrets Manager (your account) | Only Lambda role |
+| KMS Key | KMS (your account) | Only Lambda role |
+| Container | ECR (your account) | Only Lambda service (not admins) |
+| Code | Inside container | Nobody (Lambda containers not inspectable) |
 
 ## Quick Start
 
@@ -71,9 +72,9 @@ terraform init && terraform apply
 ### 4. Test
 
 ```bash
-curl http://<ALB_URL>/health
-curl http://<ALB_URL>/tools
-curl -X POST http://<ALB_URL>/invoke -H 'Content-Type: application/json' \
+curl <API_GATEWAY_URL>/health
+curl <API_GATEWAY_URL>/tools
+curl -X POST <API_GATEWAY_URL>/invoke -H 'Content-Type: application/json' \
   -d '{"message": "Calculate 15 * 7", "session_id": "test"}'
 ```
 
@@ -103,8 +104,8 @@ aws cloudwatch get-metric-statistics --namespace AWS/Bedrock --metric-name Invoc
   --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) --period 300 --statistics Sum
 
-# Container logs
-aws logs tail /ecs/bedrock-protected-agent --follow
+# Lambda logs
+aws logs tail /aws/lambda/bedrock-protected-agent --follow
 ```
 
 ## Update Prompts
@@ -112,7 +113,7 @@ aws logs tail /ecs/bedrock-protected-agent --follow
 ```bash
 cd environments/central/prompts && nano system.txt
 cd .. && terraform apply
-aws ecs update-service --cluster bedrock-protected-agent --service bedrock-protected-agent --force-new-deployment
+# Lambda will fetch new prompts on next cold start
 ```
 
 ## Update Container
@@ -139,8 +140,8 @@ cd ../central && terraform destroy
 bedrock-protected-mode/
 ├── container/app/          # Strands agent (main.py, agent.py)
 ├── modules/
-│   ├── central-account/    # ECR, Secrets, KMS, S3, SNS
-│   └── client-account/     # ECS, ALB, IAM, CloudTrail
+│   ├── central-account/    # ECR, Secrets, KMS, S3, SNS, Gatekeeper
+│   └── client-account/     # Lambda, API Gateway, IAM, CloudTrail
 └── environments/
     ├── central/            # Your account config
     └── client/             # Client account config
@@ -152,39 +153,53 @@ Uses **Amazon Nova Lite** (`amazon.nova-lite-v1:0`) - auto-enabled on first invo
 
 ## Cost Estimation (us-east-1)
 
-### Fixed Monthly (always running)
+### Fixed Monthly
 
 | Service | Config | Cost/Month |
 |---------|--------|------------|
-| ECS Fargate | 0.5 vCPU, 1GB RAM, 24/7 | ~$15 |
-| ALB | 1 ALB + minimal LCUs | ~$18 |
+| Lambda | Scales to 0 | ~$0 idle |
+| API Gateway | HTTP API | ~$0 idle |
 | Secrets Manager | 1 secret | ~$0.40 |
 | KMS | 1 CMK | ~$1 |
 | ECR | ~100MB image | ~$0.10 |
 | CloudWatch Logs | 1GB/month | ~$0.50 |
 | S3 (audit) | Minimal | ~$0.10 |
-| **Subtotal Fixed** | | **~$35/month** |
+| **Subtotal Fixed** | | **~$2.50/month** |
 
 ### Variable (per usage)
 
 | Service | Unit | Cost |
 |---------|------|------|
+| Lambda | per 1M requests | ~$0.20 |
+| Lambda | per GB-second | ~$0.0000167 |
+| API Gateway | per 1M requests | ~$1.00 |
 | Nova Lite Input | 1M tokens | $0.06 |
 | Nova Lite Output | 1M tokens | $0.24 |
-| ALB LCU | per LCU-hour | $0.008 |
 | Data Transfer | per GB out | $0.09 |
 
 ### Example Scenarios
 
-| Usage | Tokens/Month | Bedrock Cost | Total Est. |
-|-------|--------------|--------------|------------|
-| Light (1K calls) | ~500K | ~$0.15 | ~$35 |
-| Medium (10K calls) | ~5M | ~$1.50 | ~$37 |
-| Heavy (100K calls) | ~50M | ~$15 | ~$50 |
+| Usage | Tokens/Month | Lambda | Total Est. |
+|-------|--------------|--------|------------|
+| Light (1K calls) | ~500K | ~$0.10 | ~$3 |
+| Medium (10K calls) | ~5M | ~$1 | ~$5 |
+| Heavy (100K calls) | ~50M | ~$10 | ~$25 |
 
 *Costs are estimates for us-east-1. Actual costs may vary.*
+
+## Why Lambda + Container?
+
+| | Bedrock Agents | Lambda Container |
+|--|---------------|------------------|
+| Admin sees prompt | Yes | No |
+| Admin can pull image | N/A | No (ECR in your account) |
+| Admin can inspect code | N/A | No (containers not downloadable) |
+| Scale to 0 | Yes | Yes |
+| Cold start | None | 1-10s |
+| Cost (idle) | $0 | ~$2.50/month |
+| IP Protection | None | Cryptographic |
 
 ## Git
 
 - Never commit prompts or terraform.tfvars
-- Container has no embedded secrets
+- Container has no embedded secrets (fetched at runtime)

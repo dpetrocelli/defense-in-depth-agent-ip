@@ -62,25 +62,19 @@ variable "foundation_model" {
 }
 
 # =============================================================================
-# ECS Configuration
+# Lambda Configuration
 # =============================================================================
 
-variable "ecs_cpu" {
-  description = "CPU units for the ECS task (1024 = 1 vCPU)"
+variable "lambda_memory" {
+  description = "Memory for the Lambda function in MB (128-10240)"
   type        = number
   default     = 512
 }
 
-variable "ecs_memory" {
-  description = "Memory for the ECS task in MB"
+variable "lambda_timeout" {
+  description = "Timeout for the Lambda function in seconds (max 900)"
   type        = number
-  default     = 1024
-}
-
-variable "ecs_desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 1
+  default     = 60
 }
 
 # =============================================================================

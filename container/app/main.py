@@ -3,6 +3,8 @@ Strands Agent - Protected Mode
 ==============================
 This agent fetches prompts from Secrets Manager at runtime.
 The prompts are NEVER stored in the container image.
+
+Supports both Lambda (via Mangum) and local development (via Uvicorn).
 """
 
 import os
@@ -10,6 +12,7 @@ import secrets
 import logging
 from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
+from mangum import Mangum
 from app.agent import ProtectedAgent, DEMO_TOOLS
 
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +21,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Protected AI Agent",
     description="AI Agent with protected prompts",
-    version="1.0.0"
+    version="2.0.0"  # Lambda version
 )
 
 # API Key for authentication (set via environment variable)
@@ -59,10 +62,12 @@ class InvokeResponse(BaseModel):
     session_id: str
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the agent on startup."""
+def initialize_agent():
+    """Initialize the agent (called on first request or startup)."""
     global agent
+
+    if agent is not None:
+        return  # Already initialized
 
     # Configuration
     gatekeeper_url = os.environ.get("GATEKEEPER_URL")
@@ -89,6 +94,12 @@ async def startup_event():
         region=region
     )
     logger.info("Agent initialized successfully")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the agent on startup (for local development with Uvicorn)."""
+    initialize_agent()
 
 
 @app.get("/health")
@@ -127,6 +138,9 @@ async def invoke_agent(request: InvokeRequest, _: bool = Depends(verify_api_key)
     Requires X-API-Key header if API_KEY environment variable is set.
     The system prompt is fetched from Secrets Manager and never exposed.
     """
+    # Ensure agent is initialized (for Lambda cold starts)
+    initialize_agent()
+
     if not agent:
         raise HTTPException(status_code=503, detail="Agent not initialized")
 
@@ -144,6 +158,17 @@ async def invoke_agent(request: InvokeRequest, _: bool = Depends(verify_api_key)
         raise HTTPException(status_code=500, detail="Error processing request")
 
 
+# =============================================================================
+# Lambda Handler (via Mangum)
+# =============================================================================
+# Mangum converts AWS Lambda events to ASGI requests for FastAPI
+
+handler = Mangum(app, lifespan="off")
+
+
+# =============================================================================
+# Local Development
+# =============================================================================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -1,10 +1,10 @@
 # =============================================================================
-# ECS Execution Role
+# Lambda Execution Role
 # =============================================================================
-# Used by ECS to pull images and write logs
+# Used by Lambda to pull images, write logs, and access AWS services
 
-resource "aws_iam_role" "ecs_execution" {
-  name = "${var.project_name}-ecs-execution"
+resource "aws_iam_role" "lambda_execution" {
+  name = "${var.project_name}-lambda-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -12,25 +12,34 @@ resource "aws_iam_role" "ecs_execution" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "ecs-tasks.amazonaws.com"
+          Service = "lambda.amazonaws.com"
         }
         Action = "sts:AssumeRole"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = local.client_account_id
+          }
+        }
       }
     ]
   })
 
+  # Security: Permission boundary limits max permissions
+  permissions_boundary = aws_iam_policy.lambda_permission_boundary.arn
+
   tags = local.default_tags
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_execution" {
-  role       = aws_iam_role.ecs_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+# Basic Lambda execution policy (logs)
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Allow pulling from cross-account ECR
-resource "aws_iam_role_policy" "ecs_execution_ecr" {
-  name = "${var.project_name}-ecs-execution-ecr"
-  role = aws_iam_role.ecs_execution.id
+# Lambda execution policy for cross-account ECR and services
+resource "aws_iam_role_policy" "lambda_execution" {
+  name = "${var.project_name}-lambda-execution-policy"
+  role = aws_iam_role.lambda_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -52,108 +61,7 @@ resource "aws_iam_role_policy" "ecs_execution_ecr" {
           "ecr:GetAuthorizationToken"
         ]
         Resource = "*"
-      }
-    ]
-  })
-}
-
-# =============================================================================
-# ECS Task Role Permission Boundary
-# =============================================================================
-# Limits what the task role can do even if someone modifies its policies
-
-resource "aws_iam_policy" "task_permission_boundary" {
-  name        = "${var.project_name}-task-boundary"
-  description = "Permission boundary for ECS task role - limits maximum permissions"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowBedrock"
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel",
-          "bedrock:InvokeModelWithResponseStream"
-        ]
-        Resource = "arn:aws:bedrock:${local.region}::foundation-model/*"
       },
-      {
-        Sid    = "AllowSecretsManager"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        # Only secrets in the central account with our prefix
-        Resource = "arn:aws:secretsmanager:${local.region}:${var.central_account_id}:secret:${var.project_name}/*"
-      },
-      {
-        Sid    = "AllowKMS"
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = "arn:aws:kms:${local.region}:${var.central_account_id}:key/*"
-      },
-      {
-        Sid    = "DenyEverythingElse"
-        Effect = "Deny"
-        Action = [
-          "iam:*",
-          "organizations:*",
-          "account:*",
-          "sts:AssumeRole"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = local.default_tags
-}
-
-# =============================================================================
-# ECS Task Role
-# =============================================================================
-# Used by the container to access AWS services
-
-resource "aws_iam_role" "ecs_task" {
-  name = "${var.project_name}-ecs-task"
-
-  # Security: Permission boundary limits max permissions even if policies are modified
-  permissions_boundary = aws_iam_policy.task_permission_boundary.arn
-
-  # Security: Restrict to only tasks running in this account
-  # Note: Condition was causing ECS to fail to assume role
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = local.client_account_id
-          }
-        }
-      }
-    ]
-  })
-
-  tags = local.default_tags
-}
-
-resource "aws_iam_role_policy" "ecs_task" {
-  name = "${var.project_name}-ecs-task-policy"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
       {
         Sid    = "InvokeBedrock"
         Effect = "Allow"
@@ -182,6 +90,82 @@ resource "aws_iam_role_policy" "ecs_task" {
       }
     ]
   })
+}
+
+# =============================================================================
+# Lambda Permission Boundary
+# =============================================================================
+# Limits what the Lambda role can do even if someone modifies its policies
+
+resource "aws_iam_policy" "lambda_permission_boundary" {
+  name        = "${var.project_name}-lambda-boundary"
+  description = "Permission boundary for Lambda role - limits maximum permissions"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowBedrock"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = "arn:aws:bedrock:${local.region}::foundation-model/*"
+      },
+      {
+        Sid    = "AllowSecretsManager"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${local.region}:${var.central_account_id}:secret:${var.project_name}/*"
+      },
+      {
+        Sid    = "AllowKMS"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "arn:aws:kms:${local.region}:${var.central_account_id}:key/*"
+      },
+      {
+        Sid    = "AllowLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${local.region}:${local.client_account_id}:*"
+      },
+      {
+        Sid    = "AllowECR"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "DenyDangerousActions"
+        Effect = "Deny"
+        Action = [
+          "iam:*",
+          "organizations:*",
+          "account:*",
+          "sts:AssumeRole"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = local.default_tags
 }
 
 # =============================================================================
@@ -220,34 +204,15 @@ resource "aws_iam_role_policy" "deployer" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ManageECS"
+        Sid    = "ManageLambda"
         Effect = "Allow"
         Action = [
-          "ecs:UpdateService",
-          "ecs:DescribeServices",
-          "ecs:DescribeTasks",
-          "ecs:ListTasks"
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration"
         ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "ecs:cluster" = "arn:aws:ecs:${local.region}:${local.client_account_id}:cluster/${var.project_name}-agent"
-          }
-        }
-      },
-      {
-        Sid    = "PassRoleToECS"
-        Effect = "Allow"
-        Action = "iam:PassRole"
-        Resource = [
-          aws_iam_role.ecs_execution.arn,
-          aws_iam_role.ecs_task.arn
-        ]
-        Condition = {
-          StringEquals = {
-            "iam:PassedToService" = "ecs-tasks.amazonaws.com"
-          }
-        }
+        Resource = "arn:aws:lambda:${local.region}:${local.client_account_id}:function:${var.project_name}-agent"
       }
     ]
   })

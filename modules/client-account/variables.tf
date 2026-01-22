@@ -38,23 +38,17 @@ variable "foundation_model" {
   default     = "amazon.nova-lite-v1:0"
 }
 
-# ECS Configuration
-variable "ecs_cpu" {
-  description = "CPU units for the ECS task (1024 = 1 vCPU)"
+# Lambda Configuration
+variable "lambda_memory" {
+  description = "Memory for the Lambda function in MB (128-10240)"
   type        = number
   default     = 512
 }
 
-variable "ecs_memory" {
-  description = "Memory for the ECS task in MB"
+variable "lambda_timeout" {
+  description = "Timeout for the Lambda function in seconds (max 900)"
   type        = number
-  default     = 1024
-}
-
-variable "ecs_desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 1
+  default     = 60
 }
 
 # Central account resources for alerts/audit

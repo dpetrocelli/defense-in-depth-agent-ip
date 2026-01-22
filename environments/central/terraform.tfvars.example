@@ -1,9 +1,14 @@
 # Central Account Configuration
 # Copy this file to terraform.tfvars and fill in your values
 
-region            = "us-east-1"
-project_name      = "bedrock-protected"
-client_account_id = "REPLACE_WITH_CLIENT_ACCOUNT_ID"
+region       = "us-east-1"
+project_name = "bedrock-protected"
+
+# List of client account IDs that can use this agent
+client_account_ids = [
+  "111111111446",  # Client 1
+  "222222222179",  # Client 2
+]
 
 # AWS Profile (optional - can also use AWS_PROFILE env var)
 # aws_profile = "your-central-account-profile"
