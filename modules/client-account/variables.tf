@@ -86,6 +86,34 @@ variable "use_gatekeeper" {
   default     = true
 }
 
+# =============================================================================
+# API Gateway Rate Limiting
+# =============================================================================
+
+variable "api_rate_limit" {
+  description = "Default rate limit for API Gateway (requests per second)"
+  type        = number
+  default     = 100
+}
+
+variable "api_burst_limit" {
+  description = "Default burst limit for API Gateway (max concurrent requests)"
+  type        = number
+  default     = 200
+}
+
+variable "invoke_rate_limit" {
+  description = "Rate limit for /invoke endpoint (requests per second) - lower to control costs"
+  type        = number
+  default     = 10
+}
+
+variable "invoke_burst_limit" {
+  description = "Burst limit for /invoke endpoint (max concurrent requests)"
+  type        = number
+  default     = 20
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
