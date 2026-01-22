@@ -16,9 +16,9 @@ variable "project_name" {
   default     = "bedrock-protected"
 }
 
-variable "client_account_id" {
-  description = "AWS Account ID of the client"
-  type        = string
+variable "client_account_ids" {
+  description = "AWS Account IDs of the clients"
+  type        = list(string)
 }
 
 variable "alert_email" {

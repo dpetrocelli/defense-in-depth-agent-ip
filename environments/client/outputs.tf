@@ -3,24 +3,19 @@ output "client_account_id" {
   value       = module.client_account.client_account_id
 }
 
-output "ecs_cluster_name" {
-  description = "ECS Cluster name"
-  value       = module.client_account.ecs_cluster_name
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = module.client_account.lambda_function_name
 }
 
-output "ecs_service_name" {
-  description = "ECS Service name"
-  value       = module.client_account.ecs_service_name
+output "lambda_function_arn" {
+  description = "Lambda function ARN"
+  value       = module.client_account.lambda_function_arn
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = module.client_account.alb_dns_name
-}
-
-output "alb_url" {
+output "api_gateway_url" {
   description = "URL to access the agent API"
-  value       = module.client_account.alb_url
+  value       = module.client_account.api_gateway_url
 }
 
 output "invoke_api_command" {

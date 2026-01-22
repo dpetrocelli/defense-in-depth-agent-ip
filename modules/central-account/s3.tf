@@ -1,7 +1,7 @@
 # =============================================================================
 # S3 Bucket for Audit Logs
 # =============================================================================
-# Receives CloudTrail logs from client account for legal evidence
+# Receives CloudTrail logs from client accounts for legal evidence
 
 resource "aws_s3_bucket" "audit_logs" {
   bucket = "${var.project_name}-audit-logs-${local.central_account_id}"
@@ -60,7 +60,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
   }
 }
 
-# Bucket policy to allow CloudTrail from client account
+# Bucket policy to allow CloudTrail from client accounts
 resource "aws_s3_bucket_policy" "audit_logs" {
   bucket = aws_s3_bucket.audit_logs.id
 
@@ -77,7 +77,7 @@ resource "aws_s3_bucket_policy" "audit_logs" {
         Resource = aws_s3_bucket.audit_logs.arn
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = var.client_account_id
+            "aws:SourceAccount" = var.client_account_ids
           }
         }
       },
@@ -88,11 +88,11 @@ resource "aws_s3_bucket_policy" "audit_logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.audit_logs.arn}/AWSLogs/${var.client_account_id}/*"
+        Resource = [for account_id in var.client_account_ids : "${aws_s3_bucket.audit_logs.arn}/AWSLogs/${account_id}/*"]
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"      = "bucket-owner-full-control"
-            "aws:SourceAccount" = var.client_account_id
+            "aws:SourceAccount" = var.client_account_ids
           }
         }
       }

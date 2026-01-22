@@ -1,7 +1,7 @@
 # =============================================================================
 # Client Account Environment
 # =============================================================================
-# Purpose: Client account - hosts ECS Fargate running the Strands agent
+# Purpose: Client account - hosts Lambda + API Gateway running the Strands agent
 #
 # Before running:
 #   export AWS_PROFILE=your-client-account-profile
@@ -57,10 +57,9 @@ module "client_account" {
   # Model configuration
   foundation_model = var.foundation_model
 
-  # ECS configuration
-  ecs_cpu           = var.ecs_cpu
-  ecs_memory        = var.ecs_memory
-  ecs_desired_count = var.ecs_desired_count
+  # Lambda configuration
+  lambda_memory  = var.lambda_memory
+  lambda_timeout = var.lambda_timeout
 
   # Central account resources (from central environment outputs)
   central_sns_topic_arn     = var.central_sns_topic_arn

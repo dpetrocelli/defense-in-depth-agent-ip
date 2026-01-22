@@ -1,7 +1,7 @@
 # =============================================================================
 # ECR Repository for Agent Container
 # =============================================================================
-# The container image is stored here and pulled by ECS in client account
+# The container image is stored here and pulled by Lambda in client account
 
 resource "aws_ecr_repository" "agent" {
   name                 = "${var.project_name}-agent"
@@ -18,9 +18,11 @@ resource "aws_ecr_repository" "agent" {
   tags = local.default_tags
 }
 
-# Allow ONLY the ECS execution role from client account to pull images
-# SECURITY: Restricted to specific role ARN to prevent client admins from
-# pulling the image and inspecting docker history to extract signing key
+# Allow ONLY Lambda service from client accounts to pull images
+# SECURITY: Lambda service principal with source account condition
+# - Client admins CANNOT pull the image directly (no ECR access)
+# - Client admins CANNOT download Lambda container code (not exposed like zip)
+# - Only Lambda service can pull during deployment
 resource "aws_ecr_repository_policy" "agent" {
   repository = aws_ecr_repository.agent.name
 
@@ -28,16 +30,21 @@ resource "aws_ecr_repository_policy" "agent" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowECSExecutionRolePull"
+        Sid    = "AllowLambdaServicePull"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.client_account_id}:role/${var.project_name}-ecs-execution"
+          Service = "lambda.amazonaws.com"
         }
         Action = [
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability"
         ]
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.client_account_ids
+          }
+        }
       }
     ]
   })

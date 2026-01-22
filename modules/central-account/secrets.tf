@@ -21,10 +21,10 @@ resource "aws_kms_key" "secrets" {
         Resource = "*"
       },
       {
-        Sid    = "AllowClientAccountDecrypt"
+        Sid    = "AllowClientAccountsDecrypt"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.client_account_id}:root"
+          AWS = [for account_id in var.client_account_ids : "arn:aws:iam::${account_id}:root"]
         }
         Action = [
           "kms:Decrypt",
@@ -33,7 +33,7 @@ resource "aws_kms_key" "secrets" {
         Resource = "*"
         Condition = {
           ArnLike = {
-            "aws:PrincipalArn" = "arn:aws:iam::${var.client_account_id}:role/${var.project_name}-ecs-task"
+            "aws:PrincipalArn" = [for account_id in var.client_account_ids : "arn:aws:iam::${account_id}:role/${var.project_name}-lambda-execution"]
           }
         }
       }
@@ -69,7 +69,7 @@ resource "aws_secretsmanager_secret_version" "agent_prompts" {
   })
 }
 
-# Resource policy - Allow ECS task role from client account to read
+# Resource policy - Allow Lambda role from client accounts to read
 resource "aws_secretsmanager_secret_policy" "agent_prompts" {
   secret_arn = aws_secretsmanager_secret.agent_prompts.arn
 
@@ -77,10 +77,10 @@ resource "aws_secretsmanager_secret_policy" "agent_prompts" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowECSTaskRole"
+        Sid    = "AllowLambdaRole"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.client_account_id}:root"
+          AWS = [for account_id in var.client_account_ids : "arn:aws:iam::${account_id}:root"]
         }
         Action = [
           "secretsmanager:GetSecretValue"
@@ -88,7 +88,7 @@ resource "aws_secretsmanager_secret_policy" "agent_prompts" {
         Resource = "*"
         Condition = {
           ArnLike = {
-            "aws:PrincipalArn" = "arn:aws:iam::${var.client_account_id}:role/${var.project_name}-ecs-task"
+            "aws:PrincipalArn" = [for account_id in var.client_account_ids : "arn:aws:iam::${account_id}:role/${var.project_name}-lambda-execution"]
           }
         }
       }

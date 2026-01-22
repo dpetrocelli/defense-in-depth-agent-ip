@@ -49,7 +49,7 @@ resource "aws_lambda_function" "gatekeeper" {
     variables = {
       SIGNING_KEY             = random_password.signing_key.result
       PROMPT_SECRET_ARN       = aws_secretsmanager_secret.agent_prompts.arn
-      ALLOWED_CLIENT_ACCOUNTS = var.client_account_id
+      ALLOWED_CLIENT_ACCOUNTS = join(",", var.client_account_ids)
     }
   }
 

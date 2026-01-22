@@ -37,10 +37,16 @@ central_audit_bucket_arn  = "REPLACE_WITH_S3_BUCKET_ARN"
 central_audit_bucket_name = "REPLACE_WITH_S3_BUCKET_NAME"
 
 # =============================================================================
-# Optional ECS Configuration
+# Lambda Gatekeeper (Secure Prompt Delivery)
 # =============================================================================
 
-# foundation_model  = "amazon.nova-lite-v1:0"
-# ecs_cpu           = 512
-# ecs_memory        = 1024
-# ecs_desired_count = 1
+gatekeeper_url = "REPLACE_WITH_GATEKEEPER_URL"
+use_gatekeeper = true
+
+# =============================================================================
+# Optional Lambda Configuration
+# =============================================================================
+
+# foundation_model = "amazon.nova-lite-v1:0"
+# lambda_memory    = 512   # MB (128-10240)
+# lambda_timeout   = 60    # seconds (max 900)

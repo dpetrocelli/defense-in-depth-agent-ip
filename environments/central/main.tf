@@ -49,10 +49,10 @@ locals {
 module "central_account" {
   source = "../../modules/central-account"
 
-  project_name      = var.project_name
-  client_account_id = var.client_account_id
-  alert_email       = var.alert_email
-  slack_webhook_url = var.slack_webhook_url
+  project_name       = var.project_name
+  client_account_ids = var.client_account_ids
+  alert_email        = var.alert_email
+  slack_webhook_url  = var.slack_webhook_url
 
   # Prompts (stored in Secrets Manager, fetched by container at runtime)
   system_prompt      = local.system_prompt

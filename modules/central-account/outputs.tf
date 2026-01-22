@@ -68,8 +68,8 @@ output "for_client_environment" {
 output "for_container_build" {
   description = "Values needed to build the container (SENSITIVE - signing key)"
   value = {
-    gatekeeper_url  = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
-    signing_key     = random_password.signing_key.result
+    gatekeeper_url = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
+    signing_key    = random_password.signing_key.result
   }
   sensitive = true
 }

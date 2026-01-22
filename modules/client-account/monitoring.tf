@@ -22,42 +22,27 @@ resource "aws_cloudtrail" "security_audit" {
 # EventBridge Rules for Security Alerts
 # =============================================================================
 
-# Rule: Detect ECS task definition changes
-resource "aws_cloudwatch_event_rule" "ecs_task_modified" {
-  name        = "${var.project_name}-ecs-task-modified"
-  description = "Detects modifications to ECS task definitions"
+# Rule: Detect Lambda function modifications
+resource "aws_cloudwatch_event_rule" "lambda_modified" {
+  name        = "${var.project_name}-lambda-modified"
+  description = "Detects modifications to Lambda functions"
 
   event_pattern = jsonencode({
-    source      = ["aws.ecs"]
+    source      = ["aws.lambda"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
-      eventSource = ["ecs.amazonaws.com"]
-      eventName   = ["RegisterTaskDefinition", "DeregisterTaskDefinition"]
+      eventSource = ["lambda.amazonaws.com"]
+      eventName = [
+        "UpdateFunctionCode",
+        "UpdateFunctionConfiguration",
+        "DeleteFunction",
+        "CreateFunction",
+        "PublishVersion",
+        "UpdateAlias"
+      ]
       requestParameters = {
-        family = [{
+        functionName = [{
           prefix = "${var.project_name}-"
-        }]
-      }
-    }
-  })
-
-  tags = local.default_tags
-}
-
-# Rule: Detect ECS service modifications
-resource "aws_cloudwatch_event_rule" "ecs_service_modified" {
-  name        = "${var.project_name}-ecs-service-modified"
-  description = "Detects modifications to ECS services"
-
-  event_pattern = jsonencode({
-    source      = ["aws.ecs"]
-    detail-type = ["AWS API Call via CloudTrail"]
-    detail = {
-      eventSource = ["ecs.amazonaws.com"]
-      eventName   = ["UpdateService", "DeleteService", "CreateService"]
-      requestParameters = {
-        cluster = [{
-          suffix = "${var.project_name}-agent"
         }]
       }
     }
@@ -106,11 +91,11 @@ resource "aws_cloudwatch_event_rule" "secrets_access_attempt" {
     detail = {
       eventSource = ["secretsmanager.amazonaws.com"]
       eventName   = ["GetSecretValue", "DescribeSecret"]
-      # Alert on any attempt that is not from the ECS task role
+      # Alert on any attempt that is not from the Lambda role
       userIdentity = {
         arn = [{
           "anything-but" = {
-            suffix = "${var.project_name}-ecs-task"
+            suffix = "${var.project_name}-lambda-execution"
           }
         }]
       }
@@ -124,59 +109,30 @@ resource "aws_cloudwatch_event_rule" "secrets_access_attempt" {
 # EventBridge Targets - Send to Central SNS
 # =============================================================================
 
-resource "aws_cloudwatch_event_target" "ecs_task_to_sns" {
-  rule      = aws_cloudwatch_event_rule.ecs_task_modified.name
+resource "aws_cloudwatch_event_target" "lambda_to_sns" {
+  rule      = aws_cloudwatch_event_rule.lambda_modified.name
   target_id = "send-to-central-sns"
   arn       = var.central_sns_topic_arn
   role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
   input_transformer {
     input_paths = {
-      account  = "$.account"
-      time     = "$.time"
-      user     = "$.detail.userIdentity.arn"
-      action   = "$.detail.eventName"
-      family   = "$.detail.requestParameters.family"
+      account      = "$.account"
+      time         = "$.time"
+      user         = "$.detail.userIdentity.arn"
+      action       = "$.detail.eventName"
+      functionName = "$.detail.requestParameters.functionName"
     }
     input_template = <<EOF
 {
-  "alert_type": "ECS_TASK_MODIFIED",
+  "alert_type": "LAMBDA_MODIFIED",
   "severity": "CRITICAL",
   "account": <account>,
   "timestamp": <time>,
   "user": <user>,
   "action": <action>,
-  "task_family": <family>,
-  "message": "ECS task definition was modified - potential tampering detected"
-}
-EOF
-  }
-}
-
-resource "aws_cloudwatch_event_target" "ecs_service_to_sns" {
-  rule      = aws_cloudwatch_event_rule.ecs_service_modified.name
-  target_id = "send-to-central-sns"
-  arn       = var.central_sns_topic_arn
-  role_arn  = aws_iam_role.eventbridge_to_sns.arn
-
-  input_transformer {
-    input_paths = {
-      account = "$.account"
-      time    = "$.time"
-      user    = "$.detail.userIdentity.arn"
-      action  = "$.detail.eventName"
-      cluster = "$.detail.requestParameters.cluster"
-    }
-    input_template = <<EOF
-{
-  "alert_type": "ECS_SERVICE_MODIFIED",
-  "severity": "CRITICAL",
-  "account": <account>,
-  "timestamp": <time>,
-  "user": <user>,
-  "action": <action>,
-  "cluster": <cluster>,
-  "message": "ECS service was modified - potential tampering detected"
+  "function_name": <functionName>,
+  "message": "Lambda function was modified - potential tampering detected"
 }
 EOF
   }
@@ -241,57 +197,6 @@ EOF
 }
 
 # =============================================================================
-# Rule: Detect ECS Exec attempts (shell access to container)
-# =============================================================================
-
-resource "aws_cloudwatch_event_rule" "ecs_exec_attempt" {
-  name        = "${var.project_name}-ecs-exec-attempt"
-  description = "Detects attempts to execute commands in ECS containers"
-
-  event_pattern = jsonencode({
-    source      = ["aws.ecs"]
-    detail-type = ["AWS API Call via CloudTrail"]
-    detail = {
-      eventSource = ["ecs.amazonaws.com"]
-      eventName   = ["ExecuteCommand"]
-    }
-  })
-
-  tags = local.default_tags
-}
-
-resource "aws_cloudwatch_event_target" "ecs_exec_to_sns" {
-  rule      = aws_cloudwatch_event_rule.ecs_exec_attempt.name
-  target_id = "send-to-central-sns"
-  arn       = var.central_sns_topic_arn
-  role_arn  = aws_iam_role.eventbridge_to_sns.arn
-
-  input_transformer {
-    input_paths = {
-      account   = "$.account"
-      time      = "$.time"
-      user      = "$.detail.userIdentity.arn"
-      cluster   = "$.detail.requestParameters.cluster"
-      task      = "$.detail.requestParameters.task"
-      errorCode = "$.detail.errorCode"
-    }
-    input_template = <<EOF
-{
-  "alert_type": "ECS_EXEC_ATTEMPT",
-  "severity": "CRITICAL",
-  "account": <account>,
-  "timestamp": <time>,
-  "user": <user>,
-  "cluster": <cluster>,
-  "task": <task>,
-  "result": <errorCode>,
-  "message": "ALERT: Attempt to execute shell command in protected container"
-}
-EOF
-  }
-}
-
-# =============================================================================
 # Rule: Detect CloudTrail tampering (critical - we lose visibility)
 # =============================================================================
 
@@ -341,12 +246,12 @@ EOF
 }
 
 # =============================================================================
-# Rule: Detect unauthorized AssumeRole on task role
+# Rule: Detect unauthorized AssumeRole on Lambda role
 # =============================================================================
 
-resource "aws_cloudwatch_event_rule" "task_role_assumed" {
-  name        = "${var.project_name}-task-role-assumed"
-  description = "Detects when the protected task role is assumed"
+resource "aws_cloudwatch_event_rule" "lambda_role_assumed" {
+  name        = "${var.project_name}-lambda-role-assumed"
+  description = "Detects when the protected Lambda role is assumed"
 
   event_pattern = jsonencode({
     source      = ["aws.sts"]
@@ -356,13 +261,13 @@ resource "aws_cloudwatch_event_rule" "task_role_assumed" {
       eventName   = ["AssumeRole"]
       requestParameters = {
         roleArn = [{
-          suffix = "${var.project_name}-ecs-task"
+          suffix = "${var.project_name}-lambda-execution"
         }]
       }
-      # Alert only if NOT from ECS service
+      # Alert only if NOT from Lambda service
       userIdentity = {
         invokedBy = [{
-          "anything-but" = "ecs-tasks.amazonaws.com"
+          "anything-but" = "lambda.amazonaws.com"
         }]
       }
     }
@@ -371,19 +276,19 @@ resource "aws_cloudwatch_event_rule" "task_role_assumed" {
   tags = local.default_tags
 }
 
-resource "aws_cloudwatch_event_target" "task_role_to_sns" {
-  rule      = aws_cloudwatch_event_rule.task_role_assumed.name
+resource "aws_cloudwatch_event_target" "lambda_role_to_sns" {
+  rule      = aws_cloudwatch_event_rule.lambda_role_assumed.name
   target_id = "send-to-central-sns"
   arn       = var.central_sns_topic_arn
   role_arn  = aws_iam_role.eventbridge_to_sns.arn
 
   input_transformer {
     input_paths = {
-      account   = "$.account"
-      time      = "$.time"
-      user      = "$.detail.userIdentity.arn"
-      sourceIp  = "$.detail.sourceIPAddress"
-      roleArn   = "$.detail.requestParameters.roleArn"
+      account  = "$.account"
+      time     = "$.time"
+      user     = "$.detail.userIdentity.arn"
+      sourceIp = "$.detail.sourceIPAddress"
+      roleArn  = "$.detail.requestParameters.roleArn"
     }
     input_template = <<EOF
 {
@@ -394,7 +299,7 @@ resource "aws_cloudwatch_event_target" "task_role_to_sns" {
   "user": <user>,
   "source_ip": <sourceIp>,
   "role": <roleArn>,
-  "message": "CRITICAL: Protected task role assumed from non-ECS source"
+  "message": "CRITICAL: Protected Lambda role assumed from non-Lambda source"
 }
 EOF
   }

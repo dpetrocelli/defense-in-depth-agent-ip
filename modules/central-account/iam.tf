@@ -37,10 +37,10 @@ resource "aws_iam_role_policy" "agent_admin_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AssumeRoleInClientAccount"
-        Effect = "Allow"
-        Action = "sts:AssumeRole"
-        Resource = "arn:aws:iam::${var.client_account_id}:role/${var.project_name}-deployer"
+        Sid      = "AssumeRoleInClientAccount"
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = [for account_id in var.client_account_ids : "arn:aws:iam::${account_id}:role/${var.project_name}-deployer"]
       },
       {
         Sid    = "ManageSecretsLocally"
