@@ -38,6 +38,18 @@ output "secrets_kms_key_arn" {
   value       = aws_kms_key.secrets.arn
 }
 
+# Gatekeeper outputs
+output "gatekeeper_url" {
+  description = "URL of the gatekeeper API"
+  value       = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
+}
+
+output "gatekeeper_signing_key" {
+  description = "Signing key for gatekeeper authentication (embed in container image)"
+  value       = random_password.signing_key.result
+  sensitive   = true
+}
+
 # Output for client environment configuration
 output "for_client_environment" {
   description = "Values to use in client environment terraform.tfvars"
@@ -48,5 +60,16 @@ output "for_client_environment" {
     central_sns_topic_arn     = aws_sns_topic.security_alerts.arn
     central_audit_bucket_arn  = aws_s3_bucket.audit_logs.arn
     central_audit_bucket_name = aws_s3_bucket.audit_logs.id
+    gatekeeper_url            = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
   }
+}
+
+# Output for container build (sensitive - use carefully)
+output "for_container_build" {
+  description = "Values needed to build the container (SENSITIVE - signing key)"
+  value = {
+    gatekeeper_url  = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
+    signing_key     = random_password.signing_key.result
+  }
+  sensitive = true
 }

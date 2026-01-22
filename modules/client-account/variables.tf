@@ -73,6 +73,25 @@ variable "central_audit_bucket_name" {
   type        = string
 }
 
+variable "api_key" {
+  description = "API key for authenticating requests to the agent (optional - if not set, no auth required)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "gatekeeper_url" {
+  description = "URL of the Lambda Gatekeeper for secure prompt delivery"
+  type        = string
+  default     = ""
+}
+
+variable "use_gatekeeper" {
+  description = "Whether to use the Lambda Gatekeeper (true) or direct Secrets Manager access (false)"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

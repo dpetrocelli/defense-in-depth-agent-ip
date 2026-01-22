@@ -101,3 +101,30 @@ variable "central_audit_bucket_name" {
   description = "Name of the S3 bucket in central account for audit logs"
   type        = string
 }
+
+# =============================================================================
+# API Security
+# =============================================================================
+
+variable "api_key" {
+  description = "API key for authenticating requests to the agent (optional)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# =============================================================================
+# Gatekeeper Configuration (Secure Prompt Delivery)
+# =============================================================================
+
+variable "gatekeeper_url" {
+  description = "URL of the Lambda Gatekeeper for secure prompt delivery"
+  type        = string
+  default     = ""
+}
+
+variable "use_gatekeeper" {
+  description = "Whether to use the Lambda Gatekeeper (true) or direct Secrets Manager access (false)"
+  type        = bool
+  default     = true
+}

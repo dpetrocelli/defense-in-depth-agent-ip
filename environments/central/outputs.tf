@@ -33,3 +33,22 @@ output "for_client_environment" {
   description = "Values to pass to the client environment"
   value       = module.central_account.for_client_environment
 }
+
+# Gatekeeper outputs
+output "gatekeeper_url" {
+  description = "URL of the gatekeeper API"
+  value       = module.central_account.gatekeeper_url
+}
+
+output "gatekeeper_signing_key" {
+  description = "Signing key for gatekeeper authentication (embed in container image)"
+  value       = module.central_account.gatekeeper_signing_key
+  sensitive   = true
+}
+
+# Container build outputs
+output "for_container_build" {
+  description = "Values needed to build the container (SENSITIVE - signing key)"
+  value       = module.central_account.for_container_build
+  sensitive   = true
+}
