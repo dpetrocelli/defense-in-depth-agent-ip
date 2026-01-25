@@ -16,6 +16,21 @@ variable "project_name" {
   default     = "bedrock-protected"
 }
 
+# =============================================================================
+# Deployment Type Selection
+# =============================================================================
+
+variable "deployment_type" {
+  description = "Which architecture to deploy: 'lambda', 'ecs', or 'both'"
+  type        = string
+  default     = "lambda"
+
+  validation {
+    condition     = contains(["lambda", "ecs", "both"], var.deployment_type)
+    error_message = "deployment_type must be 'lambda', 'ecs', or 'both'"
+  }
+}
+
 variable "client_name" {
   description = "Name of the client (for tagging)"
   type        = string
@@ -121,4 +136,68 @@ variable "use_gatekeeper" {
   description = "Whether to use the Lambda Gatekeeper (true) or direct Secrets Manager access (false)"
   type        = bool
   default     = true
+}
+
+variable "canary_webhook_url" {
+  description = "Webhook URL to notify if canary token is detected (prompt leak detection)"
+  type        = string
+  default     = ""
+}
+
+# =============================================================================
+# ECS Configuration (only used when deployment_type = "ecs" or "both")
+# =============================================================================
+
+variable "ecs_cpu" {
+  description = "CPU units for the ECS task (256, 512, 1024, 2048, 4096)"
+  type        = number
+  default     = 512
+}
+
+variable "ecs_memory" {
+  description = "Memory for the ECS task in MB"
+  type        = number
+  default     = 1024
+}
+
+variable "ecs_desired_count" {
+  description = "Desired number of ECS tasks"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_min_count" {
+  description = "Minimum number of ECS tasks for autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "ecs_max_count" {
+  description = "Maximum number of ECS tasks for autoscaling"
+  type        = number
+  default     = 3
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC (ECS only)"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "availability_zones" {
+  description = "List of availability zones (ECS only)"
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+}
+
+variable "enable_vpc_endpoints" {
+  description = "Enable VPC endpoints for AWS services (ECS only). Set to false to use NAT Gateway only."
+  type        = bool
+  default     = false
+}
+
+variable "waf_rate_limit" {
+  description = "WAF rate limit - max requests per 5 minutes per IP (ECS only)"
+  type        = number
+  default     = 100
 }

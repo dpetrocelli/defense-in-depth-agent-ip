@@ -246,6 +246,53 @@ EOF
 }
 
 # =============================================================================
+# Rule: Detect Bedrock Model Invocation Logging (CRITICAL - exposes prompts)
+# =============================================================================
+# If enabled, ALL prompts sent to Bedrock are logged to CloudWatch/S3
+# This completely bypasses our prompt protection!
+
+resource "aws_cloudwatch_event_rule" "bedrock_logging_enabled" {
+  name        = "${var.project_name}-bedrock-logging-alert"
+  description = "CRITICAL: Detects when Bedrock model invocation logging is enabled"
+
+  event_pattern = jsonencode({
+    source      = ["aws.bedrock"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource = ["bedrock.amazonaws.com"]
+      eventName   = ["PutModelInvocationLoggingConfiguration"]
+    }
+  })
+
+  tags = local.default_tags
+}
+
+resource "aws_cloudwatch_event_target" "bedrock_logging_to_sns" {
+  rule      = aws_cloudwatch_event_rule.bedrock_logging_enabled.name
+  target_id = "send-to-central-sns"
+  arn       = var.central_sns_topic_arn
+  role_arn  = aws_iam_role.eventbridge_to_sns.arn
+
+  input_transformer {
+    input_paths = {
+      account = "$.account"
+      time    = "$.time"
+      user    = "$.detail.userIdentity.arn"
+    }
+    input_template = <<EOF
+{
+  "alert_type": "BEDROCK_LOGGING_ENABLED",
+  "severity": "CRITICAL",
+  "account": <account>,
+  "timestamp": <time>,
+  "user": <user>,
+  "message": "CRITICAL: Bedrock model invocation logging was enabled - ALL PROMPTS ARE NOW VISIBLE in CloudWatch/S3. Prompt protection is BYPASSED!"
+}
+EOF
+  }
+}
+
+# =============================================================================
 # Rule: Detect unauthorized AssumeRole on Lambda role
 # =============================================================================
 

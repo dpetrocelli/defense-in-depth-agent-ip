@@ -50,6 +50,9 @@ resource "aws_lambda_function" "gatekeeper" {
       SIGNING_KEY             = random_password.signing_key.result
       PROMPT_SECRET_ARN       = aws_secretsmanager_secret.agent_prompts.arn
       ALLOWED_CLIENT_ACCOUNTS = join(",", var.client_account_ids)
+      ALERT_SNS_TOPIC         = aws_sns_topic.security_alerts.arn
+      MAX_REQUESTS_PER_MINUTE = tostring(var.gatekeeper_rate_limit)
+      ALLOWED_IP_CIDRS        = length(var.gatekeeper_allowed_ips) > 0 ? join(",", var.gatekeeper_allowed_ips) : ""
     }
   }
 
@@ -108,6 +111,14 @@ resource "aws_iam_role_policy" "gatekeeper_lambda" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:${local.region}:${local.central_account_id}:*"
+      },
+      {
+        Sid    = "PublishSecurityAlerts"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.security_alerts.arn
       }
     ]
   })
@@ -137,6 +148,12 @@ resource "aws_apigatewayv2_stage" "gatekeeper" {
   name        = "$default"
   auto_deploy = true
 
+  # API Gateway level throttling
+  default_route_settings {
+    throttling_rate_limit  = var.gatekeeper_throttle_rate
+    throttling_burst_limit = var.gatekeeper_throttle_burst
+  }
+
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.gatekeeper_api.arn
     format = jsonencode({
@@ -146,6 +163,7 @@ resource "aws_apigatewayv2_stage" "gatekeeper" {
       httpMethod     = "$context.httpMethod"
       status         = "$context.status"
       responseLength = "$context.responseLength"
+      errorMessage   = "$context.error.message"
     })
   }
 
@@ -216,6 +234,192 @@ resource "aws_cloudwatch_metric_alarm" "gatekeeper_auth_failures" {
   statistic           = "Sum"
   threshold           = 3
   alarm_description   = "Multiple failed authentication attempts to gatekeeper"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: Rate Limiting Events
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_rate_limited" {
+  name           = "${var.project_name}-gatekeeper-rate-limited"
+  pattern        = "\"RATE_LIMITED\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperRateLimited"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_rate_limited" {
+  alarm_name          = "${var.project_name}-gatekeeper-rate-limited"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperRateLimited"
+  namespace           = "${var.project_name}/Security"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "Multiple rate limit hits - possible abuse"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: Replay Attack Attempts
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_replay_attack" {
+  name           = "${var.project_name}-gatekeeper-replay-attack"
+  pattern        = "\"REPLAY_ATTEMPT\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperReplayAttempt"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_replay_attack" {
+  alarm_name          = "${var.project_name}-gatekeeper-replay-attack"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperReplayAttempt"
+  namespace           = "${var.project_name}/Security"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "CRITICAL: Replay attack attempt detected!"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: Unauthorized Account Access
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_unauthorized" {
+  name           = "${var.project_name}-gatekeeper-unauthorized"
+  pattern        = "\"unauthorized_account\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperUnauthorizedAccount"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_unauthorized" {
+  alarm_name          = "${var.project_name}-gatekeeper-unauthorized"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperUnauthorizedAccount"
+  namespace           = "${var.project_name}/Security"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "CRITICAL: Access attempt from unauthorized account!"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: Multiple Failed Attempts (aggregate)
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_multiple_failures" {
+  name           = "${var.project_name}-gatekeeper-multiple-failures"
+  pattern        = "\"MULTIPLE_FAILED_ATTEMPTS\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperMultipleFailures"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_multiple_failures" {
+  alarm_name          = "${var.project_name}-gatekeeper-multiple-failures"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperMultipleFailures"
+  namespace           = "${var.project_name}/Security"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "CRITICAL: Account has multiple failed attempts - possible attack!"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: IP Blocked Events
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_ip_blocked" {
+  name           = "${var.project_name}-gatekeeper-ip-blocked"
+  pattern        = "\"IP_BLOCKED\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperIPBlocked"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_ip_blocked" {
+  alarm_name          = "${var.project_name}-gatekeeper-ip-blocked"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperIPBlocked"
+  namespace           = "${var.project_name}/Security"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 3
+  alarm_description   = "Multiple access attempts from unauthorized IPs"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.default_tags
+}
+
+# =============================================================================
+# Monitoring: Request Body Tampering
+# =============================================================================
+
+resource "aws_cloudwatch_log_metric_filter" "gatekeeper_body_tampered" {
+  name           = "${var.project_name}-gatekeeper-body-tampered"
+  pattern        = "\"BODY_TAMPERED\""
+  log_group_name = aws_cloudwatch_log_group.gatekeeper_lambda.name
+
+  metric_transformation {
+    name      = "GatekeeperBodyTampered"
+    namespace = "${var.project_name}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "gatekeeper_body_tampered" {
+  alarm_name          = "${var.project_name}-gatekeeper-body-tampered"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "GatekeeperBodyTampered"
+  namespace           = "${var.project_name}/Security"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "CRITICAL: Request body tampering detected - possible MITM attack!"
   alarm_actions       = [aws_sns_topic.security_alerts.arn]
 
   tags = local.default_tags

@@ -18,3 +18,16 @@ alert_email = "security@yourcompany.com"
 
 # Optional: Slack webhook for security alerts
 # slack_webhook_url = "https://hooks.slack.com/services/xxx/yyy/zzz"
+
+# =============================================================================
+# Budget Alerting (optional - alerts sent to alert_email and SNS topic)
+# =============================================================================
+
+# Monthly budget for entire project (default: $100)
+# monthly_budget_limit = "100"
+
+# Monthly budget for Bedrock usage specifically (default: $50)
+# bedrock_budget_limit = "50"
+
+# Monthly budget for Lambda usage (default: $20)
+# lambda_budget_limit = "20"

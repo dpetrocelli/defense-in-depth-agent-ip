@@ -29,6 +29,8 @@ resource "aws_lambda_function" "agent" {
       GATEKEEPER_URL         = var.gatekeeper_url
       USE_GATEKEEPER         = tostring(var.use_gatekeeper)
       ENABLE_RESPONSE_FILTER = "true"
+      ENABLE_PREFLIGHT_CHECK = "true"
+      CANARY_WEBHOOK_URL     = var.canary_webhook_url
       API_KEY                = var.api_key
     }
   }
@@ -119,8 +121,8 @@ resource "aws_apigatewayv2_stage" "default" {
   # rate_limit: Steady-state requests per second
   # burst_limit: Maximum concurrent requests (spike handling)
   default_route_settings {
-    throttling_rate_limit  = var.api_rate_limit   # requests per second
-    throttling_burst_limit = var.api_burst_limit  # max concurrent requests
+    throttling_rate_limit  = var.api_rate_limit  # requests per second
+    throttling_burst_limit = var.api_burst_limit # max concurrent requests
   }
 
   # ==========================================================================
@@ -128,7 +130,7 @@ resource "aws_apigatewayv2_stage" "default" {
   # ==========================================================================
   route_settings {
     route_key              = "POST /invoke"
-    throttling_rate_limit  = var.invoke_rate_limit   # Lower limit for expensive endpoint
+    throttling_rate_limit  = var.invoke_rate_limit # Lower limit for expensive endpoint
     throttling_burst_limit = var.invoke_burst_limit
   }
 
