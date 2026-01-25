@@ -1,10 +1,21 @@
 # =============================================================================
-# Lambda Execution Role
+# IAM Roles for ECS
 # =============================================================================
-# Used by Lambda to pull images, write logs, and access AWS services
+# Two roles:
+# 1. Execution Role - Used by ECS to pull images and write logs
+# 2. Task Role - Used by the container to access AWS services
+#
+# SECURITY:
+# - Permission boundary limits maximum permissions
+# - Deny dangerous actions (iam:*, etc.)
+# =============================================================================
 
-resource "aws_iam_role" "lambda_execution" {
-  name = "${var.project_name}-lambda-execution"
+# =============================================================================
+# ECS Execution Role (pulls images, writes logs)
+# =============================================================================
+
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -12,51 +23,95 @@ resource "aws_iam_role" "lambda_execution" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "ecs-tasks.amazonaws.com"
         }
         Action = "sts:AssumeRole"
       }
     ]
   })
 
-  # Security: Permission boundary limits max permissions
-  permissions_boundary = aws_iam_policy.lambda_permission_boundary.arn
-
   tags = local.default_tags
 }
 
-# Basic Lambda execution policy (logs)
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Lambda execution policy for cross-account ECR and services
-resource "aws_iam_role_policy" "lambda_execution" {
-  name = "${var.project_name}-lambda-execution-policy"
-  role = aws_iam_role.lambda_execution.id
+resource "aws_iam_role_policy" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution-policy"
+  role = aws_iam_role.ecs_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCrossAccountECR"
-        Effect = "Allow"
-        Action = [
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability"
-        ]
-        Resource = "arn:aws:ecr:${local.region}:${var.central_account_id}:repository/${var.project_name}-agent"
-      },
-      {
-        Sid    = "AllowECRAuth"
+        Sid    = "ECRAuth"
         Effect = "Allow"
         Action = [
           "ecr:GetAuthorizationToken"
         ]
         Resource = "*"
       },
+      {
+        Sid    = "ECRPull"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "arn:aws:ecr:${local.region}:${var.central_account_id}:repository/${var.project_name}-agent"
+      },
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.ecs.arn}:*"
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# ECS Task Role (container permissions)
+# =============================================================================
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${var.project_name}-ecs-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:ecs:${local.region}:${local.client_account_id}:*"
+          }
+          StringEquals = {
+            "aws:SourceAccount" = local.client_account_id
+          }
+        }
+      }
+    ]
+  })
+
+  # SECURITY: Permission boundary
+  permissions_boundary = aws_iam_policy.task_permission_boundary.arn
+
+  tags = local.default_tags
+}
+
+resource "aws_iam_role_policy" "ecs_task" {
+  name = "${var.project_name}-ecs-task-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
       {
         Sid    = "InvokeBedrock"
         Effect = "Allow"
@@ -90,19 +145,26 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "kms:DescribeKey"
         ]
         Resource = var.secrets_kms_key_arn
+      },
+      {
+        Sid    = "GetCallerIdentity"
+        Effect = "Allow"
+        Action = [
+          "sts:GetCallerIdentity"
+        ]
+        Resource = "*"
       }
     ]
   })
 }
 
 # =============================================================================
-# Lambda Permission Boundary
+# Permission Boundary
 # =============================================================================
-# Limits what the Lambda role can do even if someone modifies its policies
 
-resource "aws_iam_policy" "lambda_permission_boundary" {
-  name        = "${var.project_name}-lambda-boundary"
-  description = "Permission boundary for Lambda role - limits maximum permissions"
+resource "aws_iam_policy" "task_permission_boundary" {
+  name        = "${var.project_name}-task-boundary"
+  description = "Permission boundary for ECS task role"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -135,23 +197,10 @@ resource "aws_iam_policy" "lambda_permission_boundary" {
         Resource = "arn:aws:kms:${local.region}:${var.central_account_id}:key/*"
       },
       {
-        Sid    = "AllowLogs"
+        Sid    = "AllowSTS"
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:${local.region}:${local.client_account_id}:*"
-      },
-      {
-        Sid    = "AllowECR"
-        Effect = "Allow"
-        Action = [
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetAuthorizationToken"
+          "sts:GetCallerIdentity"
         ]
         Resource = "*"
       },
@@ -170,56 +219,6 @@ resource "aws_iam_policy" "lambda_permission_boundary" {
   })
 
   tags = local.default_tags
-}
-
-# =============================================================================
-# IAM Role for Deployer (used by central account)
-# =============================================================================
-
-resource "aws_iam_role" "deployer" {
-  name = "${var.project_name}-deployer"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${var.central_account_id}:root"
-        }
-        Action = "sts:AssumeRole"
-        Condition = {
-          StringEquals = {
-            "sts:ExternalId" = var.project_name
-          }
-        }
-      }
-    ]
-  })
-
-  tags = local.default_tags
-}
-
-resource "aws_iam_role_policy" "deployer" {
-  name = "${var.project_name}-deployer-policy"
-  role = aws_iam_role.deployer.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "ManageLambda"
-        Effect = "Allow"
-        Action = [
-          "lambda:UpdateFunctionCode",
-          "lambda:UpdateFunctionConfiguration",
-          "lambda:GetFunction",
-          "lambda:GetFunctionConfiguration"
-        ]
-        Resource = "arn:aws:lambda:${local.region}:${local.client_account_id}:function:${var.project_name}-agent"
-      }
-    ]
-  })
 }
 
 # =============================================================================

@@ -91,6 +91,96 @@ Container                    API Gateway              Lambda Gatekeeper
     │     prompt leakage         │                          │
 ```
 
+## HMAC Signature Matching
+
+The security relies on both sides having the **same signing key** and computing the **same signature**.
+
+### How It Works
+
+```
+┌─────────────────────────────────┐     ┌─────────────────────────────────┐
+│      CLIENT LAMBDA              │     │      GATEKEEPER LAMBDA          │
+│                                 │     │                                 │
+│  signing_key = "abc123..."      │     │  signing_key = "abc123..."      │
+│  (embedded in container)        │     │  (env var in your account)      │
+│                                 │     │                                 │
+│  1. timestamp = now()           │     │  4. Receive request             │
+│  2. nonce = random()            │     │  5. Extract headers             │
+│  3. message = timestamp +       │     │  6. message = timestamp +       │
+│              nonce + account    │     │              nonce + account    │
+│  4. signature = HMAC-SHA256(    │     │  7. expected = HMAC-SHA256(     │
+│       message, signing_key)     │     │       message, signing_key)     │
+│                                 │     │                                 │
+│  SEND ─────────────────────────────►  │  8. if signature == expected:   │
+│    - X-Timestamp                │     │        ✅ Return prompts        │
+│    - X-Nonce                    │     │     else:                       │
+│    - X-Client-Account           │     │        ❌ 403 Forbidden         │
+│    - X-Signature                │     │                                 │
+└─────────────────────────────────┘     └─────────────────────────────────┘
+```
+
+### Client Side Code (gatekeeper_client.py)
+
+```python
+def _generate_signature(self, timestamp: str, nonce: str) -> str:
+    """Generate HMAC signature for the request."""
+    message = f"{timestamp}:{nonce}:{self.client_account}"
+    signature = hmac.new(
+        key=self.signing_key.encode('utf-8'),     # ← Embedded in container
+        msg=message.encode('utf-8'),
+        digestmod=hashlib.sha256
+    ).hexdigest()
+    return signature
+```
+
+### Gatekeeper Side Code (gatekeeper.py)
+
+```python
+def generate_signature(timestamp: str, nonce: str, client_account: str) -> str:
+    """Generate the expected HMAC signature."""
+    message = f"{timestamp}:{nonce}:{client_account}"
+    signature = hmac.new(
+        key=SIGNING_KEY.encode('utf-8'),          # ← Same key from env var
+        msg=message.encode('utf-8'),
+        digestmod=hashlib.sha256
+    ).hexdigest()
+    return signature
+```
+
+### The Comparison
+
+```python
+# In gatekeeper lambda_handler():
+expected_signature = generate_signature(timestamp, nonce, client_account)
+if not hmac.compare_digest(signature, expected_signature):
+    return error_response(403, "Invalid signature")
+```
+
+### Why This Is Secure
+
+| Property | Protection |
+|----------|------------|
+| **Same key required** | Only our container has the key embedded |
+| **Timestamp included** | Prevents replay attacks (5 min window) |
+| **Nonce included** | Prevents request reuse |
+| **Account ID included** | Binds signature to specific account |
+| **hmac.compare_digest** | Prevents timing attacks |
+
+### Example Request
+
+```
+POST /get-prompts HTTP/1.1
+Host: gatekeeper.execute-api.us-east-1.amazonaws.com
+X-Timestamp: 1706000000
+X-Nonce: a1b2c3d4e5f6g7h8
+X-Client-Account: 875228160179
+X-Signature: 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a
+```
+
+**Without the signing key → Cannot generate valid X-Signature → 403 Forbidden**
+
+---
+
 ## Attack Scenarios
 
 | Attack | Why It Fails |

@@ -36,6 +36,9 @@ central_sns_topic_arn = "REPLACE_WITH_SNS_TOPIC_ARN"
 central_audit_bucket_arn  = "REPLACE_WITH_S3_BUCKET_ARN"
 central_audit_bucket_name = "REPLACE_WITH_S3_BUCKET_NAME"
 
+# EventBridge Event Bus for cross-account monitoring (optional)
+central_event_bus_arn = "REPLACE_WITH_EVENT_BUS_ARN"
+
 # =============================================================================
 # Lambda Gatekeeper (Secure Prompt Delivery)
 # =============================================================================

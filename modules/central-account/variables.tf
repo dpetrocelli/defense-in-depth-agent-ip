@@ -40,6 +40,52 @@ variable "instruction_prompt" {
   default     = ""
 }
 
+variable "gatekeeper_rate_limit" {
+  description = "Maximum requests per minute per client account to the gatekeeper"
+  type        = number
+  default     = 60
+}
+
+variable "gatekeeper_throttle_rate" {
+  description = "API Gateway throttle rate (requests per second)"
+  type        = number
+  default     = 10
+}
+
+variable "gatekeeper_throttle_burst" {
+  description = "API Gateway throttle burst limit"
+  type        = number
+  default     = 20
+}
+
+variable "gatekeeper_allowed_ips" {
+  description = "List of CIDR blocks allowed to access the gatekeeper (empty = allow all)"
+  type        = list(string)
+  default     = []
+}
+
+# =============================================================================
+# Budget Alerting
+# =============================================================================
+
+variable "monthly_budget_limit" {
+  description = "Monthly budget limit for the entire project in USD"
+  type        = string
+  default     = "100"
+}
+
+variable "bedrock_budget_limit" {
+  description = "Monthly budget limit for Bedrock usage in USD"
+  type        = string
+  default     = "50"
+}
+
+variable "lambda_budget_limit" {
+  description = "Monthly budget limit for Lambda usage in USD"
+  type        = string
+  default     = "20"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

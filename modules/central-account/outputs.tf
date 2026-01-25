@@ -61,6 +61,7 @@ output "for_client_environment" {
     central_audit_bucket_arn  = aws_s3_bucket.audit_logs.arn
     central_audit_bucket_name = aws_s3_bucket.audit_logs.id
     gatekeeper_url            = "${aws_apigatewayv2_api.gatekeeper.api_endpoint}/get-prompts"
+    central_event_bus_arn     = aws_cloudwatch_event_bus.central.arn
   }
 }
 
@@ -72,4 +73,23 @@ output "for_container_build" {
     signing_key    = random_password.signing_key.result
   }
   sensitive = true
+}
+
+# =============================================================================
+# EventBridge Outputs
+# =============================================================================
+
+output "central_event_bus_arn" {
+  description = "ARN of the central Event Bus for cross-account monitoring"
+  value       = aws_cloudwatch_event_bus.central.arn
+}
+
+output "central_event_bus_name" {
+  description = "Name of the central Event Bus"
+  value       = aws_cloudwatch_event_bus.central.name
+}
+
+output "central_dashboard_url" {
+  description = "URL to the central monitoring dashboard"
+  value       = "https://${data.aws_region.current.id}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.id}#dashboards:name=${var.project_name}-central-monitoring"
 }

@@ -67,6 +67,12 @@ variable "central_audit_bucket_name" {
   type        = string
 }
 
+variable "central_event_bus_arn" {
+  description = "ARN of the EventBridge Event Bus in central account for cross-account monitoring"
+  type        = string
+  default     = ""
+}
+
 variable "api_key" {
   description = "API key for authenticating requests to the agent (optional - if not set, no auth required)"
   type        = string
@@ -84,6 +90,12 @@ variable "use_gatekeeper" {
   description = "Whether to use the Lambda Gatekeeper (true) or direct Secrets Manager access (false)"
   type        = bool
   default     = true
+}
+
+variable "canary_webhook_url" {
+  description = "Webhook URL to notify if canary token is detected in output (prompt leak detection)"
+  type        = string
+  default     = ""
 }
 
 # =============================================================================
