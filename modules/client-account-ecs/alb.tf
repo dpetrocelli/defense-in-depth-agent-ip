@@ -27,11 +27,11 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description     = "To ECS tasks"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    description = "To ECS tasks"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/8"]
   }
 
   tags = merge(local.default_tags, {

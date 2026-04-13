@@ -6,6 +6,7 @@
 resource "aws_ecr_repository" "agent" {
   name                 = "${var.project_name}-agent"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -31,33 +32,31 @@ resource "aws_ecr_repository_policy" "agent" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowLambdaServicePull"
+        Sid    = "CrossAccountPermission"
+        Effect = "Allow"
+        Principal = {
+          AWS = [for account in var.client_account_ids : "arn:aws:iam::${account}:root"]
+        }
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+      },
+      {
+        Sid    = "LambdaECRImageCrossAccountRetrievalPolicy"
         Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
         Action = [
-          "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability"
+          "ecr:GetDownloadUrlForLayer"
         ]
         Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = var.client_account_ids
+          ArnLike = {
+            "aws:sourceARN" = [for account in var.client_account_ids : "arn:aws:lambda:*:${account}:function:*"]
           }
         }
-      },
-      {
-        Sid    = "AllowLambdaExecutionRolePull"
-        Effect = "Allow"
-        Principal = {
-          AWS = [for account in var.client_account_ids : "arn:aws:iam::${account}:role/${var.project_name}-lambda-execution"]
-        }
-        Action = [
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability"
-        ]
       }
     ]
   })

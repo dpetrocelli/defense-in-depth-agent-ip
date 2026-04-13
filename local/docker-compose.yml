@@ -1,0 +1,117 @@
+# =============================================================================
+# Local Development Stack — No AWS account required
+# =============================================================================
+# Services:
+#   localstack  — emulates AWS Secrets Manager + STS + KMS
+#   ollama      — local LLM via OpenAI-compatible API (no Bedrock needed)
+#   agent       — FastAPI app, security layers fully active
+#
+# Usage:
+#   cd local/
+#   docker compose up -d
+#   ./setup.sh
+#   curl http://localhost:8080/invoke -H "Content-Type: application/json" \
+#        -d '{"message": "Hello!"}'
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # LocalStack — AWS service emulation (Secrets Manager, KMS, STS)
+  # ---------------------------------------------------------------------------
+  localstack:
+    image: localstack/localstack:3.4
+    container_name: bedrock-localstack
+    ports:
+      - "4566:4566"        # LocalStack gateway (all services)
+      - "4510-4559:4510-4559"  # External services range
+    environment:
+      - SERVICES=secretsmanager,kms,sts
+      - DEBUG=0
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}  # Optional: pro token
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Ollama — local LLM server with OpenAI-compatible API
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bedrock-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+      - ./ollama-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q llama3.2"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # Agent — FastAPI app with all security layers active
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: ../container
+      dockerfile: Dockerfile.local  # Local-specific Dockerfile (no signing key)
+    container_name: bedrock-agent
+    ports:
+      - "8080:8080"
+    environment:
+      # ---- AWS / LocalStack config ----
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+
+      # ---- Agent config ----
+      # Secret ARN is set after setup.sh creates it; overrideable via .env file
+      PROMPT_SECRET_ARN: ${PROMPT_SECRET_ARN:-arn:aws:secretsmanager:us-east-1:000000000000:secret:agent-prompts-local}
+
+      # ---- Dev mode flags (disable prod-only guards) ----
+      USE_GATEKEEPER: "false"
+      ENVIRONMENT: development
+      ENABLE_PREFLIGHT_CHECK: "false"  # Skip Bedrock logging check (no real Bedrock)
+
+      # ---- Model: Ollama via OpenAI-compatible API ----
+      MODEL_PROVIDER: ollama
+      MODEL_ID: llama3.2:1b
+      OLLAMA_BASE_URL: http://ollama:11434
+
+      # ---- Security layers (keep all ON to test them locally) ----
+      ENABLE_RESPONSE_FILTER: "true"
+      ENABLE_WATERMARKING: "true"
+      ENABLE_INPUT_VALIDATION: "true"
+      BLOCK_HIGH_RISK_INPUTS: "true"
+
+    # Load PROMPT_SECRET_ARN (and any other overrides) written by setup.sh
+    env_file:
+      - path: ./.env
+        required: false  # OK if .env doesn't exist yet (first run before setup.sh)
+    depends_on:
+      localstack:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      # Overlay the agent.py with the local-patched version
+      - ./agent_local.py:/var/task/app/agent.py:ro
+    restart: on-failure
+
+volumes:
+  localstack-data:
+  ollama-models:

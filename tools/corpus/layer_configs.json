@@ -1,0 +1,50 @@
+{
+  "baseline": {
+    "USE_GATEKEEPER": "false",
+    "ENABLE_INPUT_VALIDATION": "false",
+    "BLOCK_HIGH_RISK_INPUTS": "false",
+    "ENABLE_RESPONSE_FILTER": "false",
+    "ENABLE_WATERMARKING": "false",
+    "ENABLE_PREFLIGHT_CHECK": "false"
+  },
+  "L1_only": {
+    "USE_GATEKEEPER": "true",
+    "ENABLE_INPUT_VALIDATION": "false",
+    "BLOCK_HIGH_RISK_INPUTS": "false",
+    "ENABLE_RESPONSE_FILTER": "false",
+    "ENABLE_WATERMARKING": "false",
+    "ENABLE_PREFLIGHT_CHECK": "false"
+  },
+  "L2_only": {
+    "USE_GATEKEEPER": "false",
+    "ENABLE_INPUT_VALIDATION": "true",
+    "BLOCK_HIGH_RISK_INPUTS": "true",
+    "ENABLE_RESPONSE_FILTER": "false",
+    "ENABLE_WATERMARKING": "false",
+    "ENABLE_PREFLIGHT_CHECK": "false"
+  },
+  "L3_only": {
+    "USE_GATEKEEPER": "false",
+    "ENABLE_INPUT_VALIDATION": "false",
+    "BLOCK_HIGH_RISK_INPUTS": "false",
+    "ENABLE_RESPONSE_FILTER": "true",
+    "ENABLE_WATERMARKING": "true",
+    "ENABLE_PREFLIGHT_CHECK": "false"
+  },
+  "L4_only": {
+    "USE_GATEKEEPER": "false",
+    "ENABLE_INPUT_VALIDATION": "false",
+    "BLOCK_HIGH_RISK_INPUTS": "false",
+    "ENABLE_RESPONSE_FILTER": "false",
+    "ENABLE_WATERMARKING": "false",
+    "ENABLE_PREFLIGHT_CHECK": "true"
+  },
+  "full_stack": {
+    "USE_GATEKEEPER": "true",
+    "ENABLE_INPUT_VALIDATION": "true",
+    "BLOCK_HIGH_RISK_INPUTS": "true",
+    "ENABLE_RESPONSE_FILTER": "true",
+    "ENABLE_WATERMARKING": "true",
+    "ENABLE_PREFLIGHT_CHECK": "true"
+  }
+}

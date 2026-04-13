@@ -33,8 +33,10 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = "central"
+      Environment = "r+d"
       Project     = var.project_name
+      Owner       = "pi-review"
+      CostCenter  = "pi-review"
       ManagedBy   = "terraform"
     }
   }

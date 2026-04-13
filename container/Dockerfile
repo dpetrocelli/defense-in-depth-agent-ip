@@ -28,7 +28,7 @@ COPY app/ ${LAMBDA_TASK_ROOT}/app/
 # docker history, image inspect, or layer tarballs.
 RUN --mount=type=secret,id=signing_key \
     cp /run/secrets/signing_key ${LAMBDA_TASK_ROOT}/.signing_key && \
-    chmod 400 ${LAMBDA_TASK_ROOT}/.signing_key
+    chmod 444 ${LAMBDA_TASK_ROOT}/.signing_key
 
 # Set the Lambda handler
 CMD ["app.main.handler"]

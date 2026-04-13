@@ -4,7 +4,8 @@
 # Receives CloudTrail logs from client accounts for legal evidence
 
 resource "aws_s3_bucket" "audit_logs" {
-  bucket = "${var.project_name}-audit-logs-${local.central_account_id}"
+  bucket        = "${var.project_name}-audit-logs-${local.central_account_id}"
+  force_destroy = true
 
   tags = local.default_tags
 }

@@ -1,12 +1,6 @@
-# Bedrock Protected Mode
+# Defense-in-Depth Agent IP
 
-Reference implementation for the paper:
-
-> **A Defense-in-Depth Architecture for Protecting AI Agent Intellectual Property in Multi-Tenant Cloud Environments**
-> David Petrocelli, Juan Manuel Fernandez
-> Universidad Nacional de Lujan / ITBA
-
-Deploy AI agents in customer AWS accounts while keeping system prompts (intellectual property) completely protected via a four-layer defense-in-depth architecture.
+Deploy AI agents in customer cloud accounts while keeping system prompts (intellectual property) completely protected via a four-layer defense-in-depth architecture.
 
 ## Architecture
 

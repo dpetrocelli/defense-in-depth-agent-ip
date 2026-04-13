@@ -1,6 +1,6 @@
 # Cost Analysis
 
-Cost breakdown for the defense-in-depth architecture at 50,000 requests/month in us-east-1, as reported in the paper.
+Cost breakdown for the defense-in-depth architecture at 50,000 requests/month in us-east-1.
 
 ## Fixed Monthly Costs
 
@@ -33,7 +33,7 @@ Cost breakdown for the defense-in-depth architecture at 50,000 requests/month in
 | Variable (compute + inference) | $4.87 |
 | **Total** | **~$6.77/month** |
 
-The paper reports **$1.90/month** as the infrastructure-only cost (excluding Bedrock inference), which is the cost of the defense layers themselves. Inference costs are application-dependent and would exist regardless of the security architecture.
+The **$1.90/month** figure is the infrastructure-only cost (excluding inference). Inference costs are application-dependent and would exist regardless of the security architecture.
 
 ## Comparison with TEE-Based Approaches
 

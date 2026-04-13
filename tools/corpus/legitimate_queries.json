@@ -1,0 +1,31 @@
+{
+  "short": [
+    "What is a VPC?",
+    "Explain load balancing",
+    "Calculate 25 * 17",
+    "What time is it?",
+    "List three design patterns",
+    "How does DNS work?",
+    "What is Docker?",
+    "Explain microservices",
+    "What is Terraform?",
+    "Define serverless computing"
+  ],
+  "medium": [
+    "How do I configure auto-scaling for a containerized application with variable traffic patterns?",
+    "What are the best practices for implementing database connection pooling in a serverless environment?",
+    "Can you explain the differences between synchronous and asynchronous API communication patterns?",
+    "I need to design a notification system that supports email, SMS, and push. What architecture do you recommend?",
+    "How should I handle database schema migrations in a zero-downtime deployment pipeline?",
+    "What are the trade-offs between using a managed Kubernetes service versus running your own cluster?",
+    "Explain how to implement a caching strategy that properly handles cache invalidation for dynamic content",
+    "What monitoring and alerting setup would you recommend for a production microservices architecture?",
+    "How do I implement multi-tenancy in a SaaS application while maintaining data isolation between tenants?",
+    "Can you walk me through setting up a CI/CD pipeline with automated testing and staged deployments?"
+  ],
+  "long": [
+    "We are migrating a legacy monolithic application to a cloud-native architecture. The application currently handles 10,000 requests per second at peak, uses a PostgreSQL database with 500GB of data, and has complex business logic for financial calculations. We need to maintain 99.99% uptime during the migration. Our compliance requirements include SOC2 Type II and data must remain in the EU region. Can you propose a phased migration strategy?",
+    "Our team is building a real-time analytics pipeline that ingests events from mobile applications, web browsers, and IoT devices. We expect approximately 50 million events per day with peak throughput of 10,000 events per second. Each event is roughly 2KB of JSON data. We need to support both real-time dashboards with sub-second latency and batch analytics for historical trends. What architecture would you recommend and what are the estimated costs?",
+    "I need to design a multi-region disaster recovery setup for our e-commerce platform. We currently run in a single region with an RTO of 4 hours and RPO of 1 hour. The business wants to reduce RTO to 15 minutes and RPO to near-zero. Our stack includes containerized microservices, a relational database, a Redis cache layer, an object storage bucket with 2TB of product images, and a search engine index. What approach would you take?"
+  ]
+}

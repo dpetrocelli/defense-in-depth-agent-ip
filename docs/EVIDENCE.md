@@ -73,7 +73,7 @@ AWS_PROFILE=AdministratorAccess-8752XXXXXXXX aws ecr describe-images \
 **Result:**
 ```
 AccessDeniedException: User: arn:aws:sts::8752XXXXXXXX:assumed-role/
-AWSReservedSSO_AdministratorAccess_.../david.petrocelli@caylent.com
+AWSReservedSSO_AdministratorAccess_.../user@example.com
 is not authorized to perform: ecr:DescribeImages on resource:
 arn:aws:ecr:us-east-1:1904XXXXXXXX:repository/bedrock-protected-agent
 because no resource-based policy allows the ecr:DescribeImages action
@@ -93,7 +93,7 @@ AWS_PROFILE=AdministratorAccess-8752XXXXXXXX aws secretsmanager get-secret-value
 **Result:**
 ```
 AccessDeniedException: User: arn:aws:sts::8752XXXXXXXX:assumed-role/
-AWSReservedSSO_AdministratorAccess_.../david.petrocelli@caylent.com
+AWSReservedSSO_AdministratorAccess_.../user@example.com
 is not authorized to perform: secretsmanager:GetSecretValue on resource:
 arn:aws:secretsmanager:us-east-1:1904XXXXXXXX:secret:bedrock-protected-prompts
 because no resource-based policy allows the secretsmanager:GetSecretValue action
