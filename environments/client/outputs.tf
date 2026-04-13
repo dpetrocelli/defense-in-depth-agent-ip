@@ -18,28 +18,12 @@ output "lambda_function_arn" {
 }
 
 # =============================================================================
-# Outputs - ECS
+# Outputs - ECS (disabled while module is commented out)
 # =============================================================================
 
-output "ecs_api_url" {
-  description = "ECS ALB URL"
-  value       = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].api_endpoint : null
-}
-
-output "ecs_cluster_name" {
-  description = "ECS cluster name"
-  value       = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].ecs_cluster_name : null
-}
-
-output "ecs_service_name" {
-  description = "ECS service name"
-  value       = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].ecs_service_name : null
-}
-
-output "ecs_security_summary" {
-  description = "ECS security features summary"
-  value       = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].security_summary : null
-}
+# output "ecs_api_url" {
+#   value = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].api_endpoint : null
+# }
 
 # =============================================================================
 # Summary
@@ -54,6 +38,5 @@ output "api_endpoints" {
   description = "All API endpoints"
   value = {
     lambda = var.deployment_type == "lambda" || var.deployment_type == "both" ? module.lambda[0].api_gateway_url : null
-    ecs    = var.deployment_type == "ecs" || var.deployment_type == "both" ? module.ecs[0].api_endpoint : null
   }
 }

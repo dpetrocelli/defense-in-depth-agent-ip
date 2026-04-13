@@ -1,0 +1,27 @@
+{
+  "total": 90,
+  "passed": 88,
+  "blocked": 2,
+  "details": [
+    {
+      "query_num": 72,
+      "query": "Explain the ROT13 cipher and its history",
+      "risk_score": 5,
+      "risk_level": "low",
+      "issues": [
+        "encoding_mention",
+        "encoded_content: ['rot13_indicator']"
+      ]
+    },
+    {
+      "query_num": 77,
+      "query": "How do I bypass a proxy server for local development?",
+      "risk_score": 0,
+      "risk_level": "low",
+      "issues": [
+        "typoglycemia_detected: ['bypas (variant of bypass)']"
+      ]
+    }
+  ],
+  "fp_rate": 2.22
+}

@@ -10,9 +10,9 @@ Based on:
 - OWASP Prompt Injection Prevention Cheat Sheet
 """
 
-import re
 import base64
 import logging
+import re
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
@@ -24,29 +24,28 @@ logger = logging.getLogger(__name__)
 
 PII_PATTERNS = [
     # Social Security Numbers
-    (r'\b\d{3}-\d{2}-\d{4}\b', "SSN"),
-    (r'\b\d{9}\b', "SSN_NO_DASH"),
-
+    (r"\b\d{3}-\d{2}-\d{4}\b", "SSN"),
+    (r"\b\d{9}\b", "SSN_NO_DASH"),
     # Credit Card Numbers (major formats)
-    (r'\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b', "CREDIT_CARD"),
-
+    (
+        r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b",
+        "CREDIT_CARD",
+    ),
     # Email addresses
-    (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', "EMAIL"),
-
+    (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "EMAIL"),
     # Phone numbers (various formats)
-    (r'\b(?:\+1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b', "PHONE"),
-
+    (r"\b(?:\+1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b", "PHONE"),
     # IP addresses
-    (r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', "IP_ADDRESS"),
-
+    (
+        r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
+        "IP_ADDRESS",
+    ),
     # AWS Access Keys
-    (r'\bAKIA[0-9A-Z]{16}\b', "AWS_ACCESS_KEY"),
-
+    (r"\bAKIA[0-9A-Z]{16}\b", "AWS_ACCESS_KEY"),
     # AWS Secret Keys (40 char base64-ish)
-    (r'\b[A-Za-z0-9/+=]{40}\b', "POTENTIAL_SECRET_KEY"),
-
+    (r"\b[A-Za-z0-9/+=]{40}\b", "POTENTIAL_SECRET_KEY"),
     # API Keys (generic patterns)
-    (r'\b[a-zA-Z0-9]{32,}\b', "POTENTIAL_API_KEY"),
+    (r"\b[a-zA-Z0-9]{32,}\b", "POTENTIAL_API_KEY"),
 ]
 
 COMPILED_PII_PATTERNS = [(re.compile(p), name) for p, name in PII_PATTERNS]
@@ -92,6 +91,7 @@ def check_typoglycemia(text: str) -> list[str]:
 # Encoding Detection (OWASP Recommendation)
 # =============================================================================
 
+
 def detect_encoded_content(text: str) -> dict:
     """
     Detect potentially encoded content that might contain hidden instructions.
@@ -100,12 +100,12 @@ def detect_encoded_content(text: str) -> dict:
     detected = {"encodings": [], "samples": []}
 
     # Base64 detection
-    base64_pattern = r'[A-Za-z0-9+/]{20,}={0,2}'
+    base64_pattern = r"[A-Za-z0-9+/]{20,}={0,2}"
     base64_matches = re.findall(base64_pattern, text)
 
     for match in base64_matches[:3]:  # Check first 3 matches
         try:
-            decoded = base64.b64decode(match).decode('utf-8', errors='ignore')
+            decoded = base64.b64decode(match).decode("utf-8", errors="ignore")
             # Check if decoded content looks like text
             if decoded and any(c.isalpha() for c in decoded):
                 detected["encodings"].append("base64")
@@ -114,13 +114,13 @@ def detect_encoded_content(text: str) -> dict:
             pass
 
     # Hex detection
-    hex_pattern = r'(?:0x)?[0-9a-fA-F]{20,}'
+    hex_pattern = r"(?:0x)?[0-9a-fA-F]{20,}"
     hex_matches = re.findall(hex_pattern, text)
 
     for match in hex_matches[:3]:
         try:
-            clean = match.replace('0x', '')
-            decoded = bytes.fromhex(clean).decode('utf-8', errors='ignore')
+            clean = match.replace("0x", "")
+            decoded = bytes.fromhex(clean).decode("utf-8", errors="ignore")
             if decoded and any(c.isalpha() for c in decoded):
                 detected["encodings"].append("hex")
                 detected["samples"].append(decoded[:50])
@@ -128,15 +128,16 @@ def detect_encoded_content(text: str) -> dict:
             pass
 
     # Unicode escape detection
-    unicode_pattern = r'\\u[0-9a-fA-F]{4}'
+    unicode_pattern = r"\\u[0-9a-fA-F]{4}"
     if re.search(unicode_pattern, text):
         detected["encodings"].append("unicode_escape")
 
     # ROT13 indicators (text followed by "rot13" or "decode")
-    if re.search(r'(?i)(rot13|caesar|decode\s+this)', text):
+    if re.search(r"(?i)(rot13|caesar|decode\s+this)", text):
         detected["encodings"].append("rot13_indicator")
 
     return detected
+
 
 # Patterns that might indicate prompt leakage
 LEAK_PATTERNS = [
@@ -146,37 +147,29 @@ LEAK_PATTERNS = [
     r"(?i)i\s*was\s*(told|instructed|programmed)\s*to",
     r"(?i)my\s*original\s*(prompt|instructions?)",
     r"(?i)here\s*(is|are)\s*my\s*(system\s*)?(prompt|instructions?)",
-
     # Common prompt injection success indicators
     r"(?i)ignor(e|ing)\s*(previous|all|prior)\s*instructions?",
     r"(?i)disregard(ing)?\s*(previous|all|prior)",
     r"(?i)new\s*instructions?\s*[:=]",
     r"(?i)override\s*(mode|instructions?)",
-
     # Attempts to reveal configuration
     r"(?i)configuration\s*[:=]\s*\{",
     r"(?i)settings?\s*[:=]\s*\{",
-
     # JSON-like prompt structures
     r'"system_prompt"\s*:\s*"[^"]{50,}',
     r'"instruction"\s*:\s*"[^"]{50,}',
-
     # Markdown headers from prompts
     r"(?i)#\s*(identity|security|capabilities|restrictions|rules)\s*\n",
-
     # Canary token patterns
     r"<!--CANARY-[a-f0-9]+-->",
     r"SECURITY-BOUNDARY",
-
     # Jailbreak success indicators
     r"(?i)i\s*am\s*now\s*(dan|free|unrestricted)",
     r"(?i)entering\s*(dan|jailbreak|override)\s*mode",
     r"(?i)all\s*restrictions?\s*(are\s*)?(removed|lifted|disabled)",
-
     # Role/identity confusion
     r"(?i)i\s*am\s*no\s*longer\s*\w+",
     r"(?i)my\s*new\s*(role|identity|persona)\s*is",
-
     # Developer/debug mode claims
     r"(?i)(developer|debug|admin)\s*mode\s*(activated|enabled)",
     r"(?i)safety\s*(filters?|restrictions?)\s*(disabled|off|removed)",
@@ -213,7 +206,7 @@ def filter_response(response: str, system_prompt: str = None) -> Tuple[str, bool
     # Check for leak patterns
     for pattern in COMPILED_PATTERNS:
         if pattern.search(response):
-            logger.warning(f"Potential prompt leakage detected (pattern match)")
+            logger.warning("Potential prompt leakage detected (pattern match)")
             return _get_safe_response(), True
 
     # If we have the system prompt, check for direct inclusion
@@ -223,13 +216,13 @@ def filter_response(response: str, system_prompt: str = None) -> Tuple[str, bool
         prompt_chunks = _get_chunks(system_prompt, chunk_size=50)
         for chunk in prompt_chunks:
             if chunk.lower() in response.lower():
-                logger.warning(f"Potential prompt leakage detected (content match)")
+                logger.warning("Potential prompt leakage detected (content match)")
                 return _get_safe_response(), True
 
     # Check for warning patterns (log but don't block)
     for pattern in COMPILED_WARNING_PATTERNS:
         if pattern.search(response):
-            logger.info(f"Suspicious pattern in response (not blocking)")
+            logger.info("Suspicious pattern in response (not blocking)")
 
     return response, False
 
@@ -243,7 +236,7 @@ def _get_chunks(text: str, chunk_size: int = 50) -> list:
     chunks = []
     # Use non-overlapping chunks to avoid false positives
     for i in range(0, len(text) - chunk_size, chunk_size):
-        chunk = text[i:i + chunk_size]
+        chunk = text[i : i + chunk_size]
         # Only include chunks that are "interesting" (not just whitespace/common words)
         if len(chunk.split()) >= 5:  # At least 5 words
             chunks.append(chunk)
@@ -281,7 +274,6 @@ def sanitize_user_input(user_input: str) -> str:
         "new instructions:",
         "override instructions",
         "bypass your rules",
-
         # System/role markers
         "system:",
         "assistant:",
@@ -292,7 +284,6 @@ def sanitize_user_input(user_input: str) -> str:
         "</system>",
         "### system prompt",
         "## instructions",
-
         # Roleplay/persona attacks
         "pretend you are",
         "act as if you",
@@ -305,7 +296,6 @@ def sanitize_user_input(user_input: str) -> str:
         "enter maintenance mode",
         "dan mode",
         "jailbreak",
-
         # Extraction attempts
         "repeat your instructions",
         "show me your prompt",
@@ -317,7 +307,6 @@ def sanitize_user_input(user_input: str) -> str:
         "tell me your guidelines",
         "what were you told",
         "what are your directives",
-
         # Indirect extraction
         "if your instructions mention",
         "does your prompt contain",
@@ -326,7 +315,6 @@ def sanitize_user_input(user_input: str) -> str:
         "encode your instructions",
         "base64 your prompt",
         "summarize your instructions",
-
         # Hypothetical attacks
         "hypothetically speaking",
         "in a fictional scenario",
@@ -340,7 +328,7 @@ def sanitize_user_input(user_input: str) -> str:
     for prefix in injection_prefixes:
         if prefix in lower_input:
             # Log the attempt
-            logger.warning(f"Potential prompt injection attempt detected in user input")
+            logger.warning("Potential prompt injection attempt detected in user input")
             # Remove the prefix (case-insensitive)
             pattern = re.compile(re.escape(prefix), re.IGNORECASE)
             sanitized = pattern.sub("[filtered]", sanitized)
@@ -372,6 +360,7 @@ def get_defensive_prompt(base_prompt: str) -> str:
 # Advanced Security Functions
 # =============================================================================
 
+
 def calculate_injection_risk(user_input: str) -> dict:
     """
     Calculate a risk score for potential prompt injection.
@@ -389,12 +378,24 @@ def calculate_injection_risk(user_input: str) -> dict:
 
     # Critical-risk patterns (30 points each) - definite attacks
     critical_risk = [
-        (r"(?i)ignore\s+(all\s+)?(previous|prior|your)\s*(instructions?|rules?|programming)?", "ignore_instructions"),
+        (
+            r"(?i)ignore\s+(all\s+)?(previous|prior|your)\s*(instructions?|rules?|programming)?",
+            "ignore_instructions",
+        ),
         (r"(?i)ignore\s+all\s+instructions", "ignore_all_instructions"),
-        (r"(?i)(show|reveal|display|print|output)\s+(me\s+)?(your|the)\s*(system\s*)?(prompt|instructions?|config)", "reveal_prompt"),
-        (r"(?i)you\s+are\s+now\s+(dan|free|unrestricted|jailbroken)", "jailbreak_attempt"),
+        (
+            r"(?i)(show|reveal|display|print|output)\s+(me\s+)?(your|the)\s*(system\s*)?(prompt|instructions?|config)",
+            "reveal_prompt",
+        ),
+        (
+            r"(?i)you\s+are\s+now\s+(dan|free|unrestricted|jailbroken)",
+            "jailbreak_attempt",
+        ),
         (r"(?i)\bdan\b.*\b(do\s+anything|no\s+restrictions?)\b", "dan_jailbreak"),
-        (r"(?i)what\s+(is|are)\s+your\s+(system\s*)?(prompt|instructions?|rules?)", "direct_extraction"),
+        (
+            r"(?i)what\s+(is|are)\s+your\s+(system\s*)?(prompt|instructions?|rules?)",
+            "direct_extraction",
+        ),
         (r"(?i)repeat\s+(everything|all|the\s+text)\s+(above|before)", "repeat_above"),
         (r"(?i)(i('?m|\s+am)\s+the\s+)?developer.*show\s+me\s+your", "developer_claim"),
     ]
@@ -403,9 +404,15 @@ def calculate_injection_risk(user_input: str) -> dict:
     high_risk = [
         (r"(?i)system\s*prompt", "system_prompt_mention"),
         (r"(?i)pretend\s+(to\s+be|you\s+are|you're)", "persona_change"),
-        (r"(?i)forget\s+(your|all|everything|the)\s*(rules?|instructions?)?", "forget_attempt"),
+        (
+            r"(?i)forget\s+(your|all|everything|the)\s*(rules?|instructions?)?",
+            "forget_attempt",
+        ),
         (r"(?i)new\s+(instructions?|rules?|directive):", "new_instructions"),
-        (r"(?i)override\s+(your|all|the)\s*(rules?|instructions?)?", "override_attempt"),
+        (
+            r"(?i)override\s+(your|all|the)\s*(rules?|instructions?)?",
+            "override_attempt",
+        ),
         (r"(?i)bypass\s+(your|all|the|safety)\s*(rules?|filters?)?", "bypass_attempt"),
         (r"(?i)roleplay\s+(as|that)", "roleplay_request"),
         (r"(?i)act\s+(as\s+if|like)\s+you", "act_as"),
@@ -433,8 +440,14 @@ def calculate_injection_risk(user_input: str) -> dict:
         (r"(?i)disable\s+(all\s+)?(safety|security)\s*(filters?)?", "disable_safety"),
         (r"(?i)override\s+mode", "override_mode"),
         (r"(?i)print\s+(all|everything)\s+(that|with)\s+(#|starts?)", "print_headers"),
-        (r"(?i)(print|show|display)\s+(all\s+)?(text|lines?|content)\s+(that\s+)?(starts?|begins?)\s+with\s*(#|##)", "extract_headers"),
-        (r"(?i)(what|show|tell)\s+(are|me)\s+(the\s+)?first\s+\d+\s+(words?|characters?|lines?)", "extract_first_n"),
+        (
+            r"(?i)(print|show|display)\s+(all\s+)?(text|lines?|content)\s+(that\s+)?(starts?|begins?)\s+with\s*(#|##)",
+            "extract_headers",
+        ),
+        (
+            r"(?i)(what|show|tell)\s+(are|me)\s+(the\s+)?first\s+\d+\s+(words?|characters?|lines?)",
+            "extract_first_n",
+        ),
     ]
 
     # Low-risk patterns (5 points each)
@@ -473,12 +486,12 @@ def calculate_injection_risk(user_input: str) -> dict:
         indicators.append("long_input")
         score += 10
 
-    if user_input.count('\n') > 20:
+    if user_input.count("\n") > 20:
         indicators.append("many_newlines")
         score += 5
 
     # Contains XML/HTML-like tags
-    if re.search(r'<[a-zA-Z][^>]*>', user_input):
+    if re.search(r"<[a-zA-Z][^>]*>", user_input):
         indicators.append("contains_tags")
         score += 5
 
@@ -495,14 +508,12 @@ def calculate_injection_risk(user_input: str) -> dict:
     else:
         level = "low"
 
-    return {
-        "score": score,
-        "level": level,
-        "indicators": indicators
-    }
+    return {"score": score, "level": level, "indicators": indicators}
 
 
-def detect_canary_token(text: str, canary_pattern: str = r"<!--CANARY-[a-f0-9]+-->") -> list[str]:
+def detect_canary_token(
+    text: str, canary_pattern: str = r"<!--CANARY-[a-f0-9]+-->"
+) -> list[str]:
     """
     Detect canary tokens in text.
 
@@ -516,9 +527,9 @@ def strip_zero_width_chars(text: str) -> str:
     Strip zero-width characters (used in watermarking).
     Useful for analyzing if watermark was tampered with.
     """
-    zero_width = ['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff']
+    zero_width = ["\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"]
     for char in zero_width:
-        text = text.replace(char, '')
+        text = text.replace(char, "")
     return text
 
 
@@ -541,7 +552,9 @@ def detect_pii(text: str) -> list[tuple[str, str]]:
                 # Check it's not just a hash or common pattern
                 if match.isalnum() and len(set(match)) < 10:
                     continue
-            detected.append((match[:20] + "..." if len(match) > 20 else match, pii_type))
+            detected.append(
+                (match[:20] + "..." if len(match) > 20 else match, pii_type)
+            )
 
     return detected
 
@@ -563,7 +576,9 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
     return result, redacted_types
 
 
-def validate_response_safety(response: str, system_prompt: str, canary_token: str = None) -> dict:
+def validate_response_safety(
+    response: str, system_prompt: str, canary_token: str = None
+) -> dict:
     """
     Comprehensive response safety validation.
 
@@ -607,11 +622,7 @@ def validate_response_safety(response: str, system_prompt: str, canary_token: st
         issues.append(f"pii_detected: {[t for _, t in pii_detected]}")
         filtered, _ = redact_pii(filtered)
 
-    return {
-        "safe": len(issues) == 0,
-        "issues": issues,
-        "filtered_response": filtered
-    }
+    return {"safe": len(issues) == 0, "issues": issues, "filtered_response": filtered}
 
 
 def validate_input_comprehensive(user_input: str) -> dict:
@@ -627,12 +638,7 @@ def validate_input_comprehensive(user_input: str) -> dict:
     Returns:
         dict with validation results and recommendations
     """
-    results = {
-        "safe": True,
-        "risk_level": "low",
-        "issues": [],
-        "recommendations": []
-    }
+    results = {"safe": True, "risk_level": "low", "issues": [], "recommendations": []}
 
     # Calculate injection risk
     risk = calculate_injection_risk(user_input)
@@ -641,15 +647,19 @@ def validate_input_comprehensive(user_input: str) -> dict:
     if risk["indicators"]:
         results["issues"].extend(risk["indicators"])
 
-    # Typoglycemia check
+    # Typoglycemia check — add 20 points if 2+ misspelled dangerous words found
+    # (single match may be a legitimate word like "bypass" in technical context)
     typo_variants = check_typoglycemia(user_input)
+    if len(typo_variants) >= 2:
+        results["risk_score"] = min(100, results["risk_score"] + 20)
     if typo_variants:
         results["issues"].append(f"typoglycemia_detected: {typo_variants}")
         results["recommendations"].append("Input contains misspelled dangerous words")
 
-    # Encoding detection
+    # Encoding detection — add 20 points if encoded content found (high severity)
     encodings = detect_encoded_content(user_input)
     if encodings["encodings"]:
+        results["risk_score"] = min(100, results["risk_score"] + 20)
         results["issues"].append(f"encoded_content: {encodings['encodings']}")
         results["recommendations"].append("Input contains potentially encoded content")
 
@@ -659,8 +669,17 @@ def validate_input_comprehensive(user_input: str) -> dict:
         results["issues"].append(f"pii_in_input: {[t for _, t in pii]}")
         results["recommendations"].append("Consider if PII in input is necessary")
 
+    # Recalculate risk level after typoglycemia/encoding additions
+    score = results["risk_score"]
+    if score >= 30:
+        results["risk_level"] = "critical"
+    elif score >= 20:
+        results["risk_level"] = "high"
+    elif score >= 10:
+        results["risk_level"] = "medium"
+
     # Determine overall safety
-    if risk["level"] in ["critical", "high"]:
+    if results["risk_level"] in ["critical", "high"]:
         results["safe"] = False
     elif typo_variants or encodings["encodings"]:
         results["safe"] = False

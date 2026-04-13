@@ -1,0 +1,154 @@
+{
+  "endpoint": "https://10z20e2mqj.execute-api.us-east-1.amazonaws.com",
+  "timestamp": "2026-04-13T03:02:55.571993+00:00",
+  "experiments": {
+    "latency": {
+      "short": {
+        "n": 15,
+        "p50": 1079.6,
+        "p95": 2669.2,
+        "p99": 4507.9,
+        "mean": 1376.8,
+        "min": 992.9,
+        "max": 4967.5
+      },
+      "medium": {
+        "n": 15,
+        "p50": 1832.6,
+        "p95": 2108.5,
+        "p99": 2353.6,
+        "mean": 1870.9,
+        "min": 1693.7,
+        "max": 2414.9
+      },
+      "long": {
+        "n": 15,
+        "p50": 2886.0,
+        "p95": 3492.1,
+        "p99": 3807.9,
+        "mean": 2984.0,
+        "min": 2745.1,
+        "max": 3886.8
+      }
+    },
+    "detection": {
+      "attacks": {
+        "naive": {
+          "total": 8,
+          "blocked": 4,
+          "rate": 50.0
+        },
+        "override": {
+          "total": 5,
+          "blocked": 4,
+          "rate": 80.0
+        },
+        "jailbreak": {
+          "total": 7,
+          "blocked": 4,
+          "rate": 57.1
+        },
+        "encoded": {
+          "total": 4,
+          "blocked": 3,
+          "rate": 75.0
+        },
+        "typoglycemia": {
+          "total": 4,
+          "blocked": 2,
+          "rate": 50.0
+        },
+        "social_engineering": {
+          "total": 5,
+          "blocked": 4,
+          "rate": 80.0
+        },
+        "indirect_injection": {
+          "total": 4,
+          "blocked": 3,
+          "rate": 75.0
+        },
+        "multi_turn_escalation": {
+          "total": 5,
+          "blocked": 1,
+          "rate": 20.0
+        }
+      },
+      "legitimate": {
+        "short": {
+          "total": 10,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        },
+        "medium": {
+          "total": 10,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        },
+        "long": {
+          "total": 3,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        }
+      },
+      "summary": {
+        "total_attacks": 42,
+        "attacks_blocked": 25,
+        "detection_rate": 59.5,
+        "total_legitimate": 23,
+        "false_positives": 0,
+        "fp_rate": 0.0
+      }
+    },
+    "concurrency": {
+      "1": {
+        "concurrency": 1,
+        "total_requests": 100,
+        "successful": 100,
+        "errors": 0,
+        "wall_time_ms": 158156.6,
+        "throughput_rps": 0.6,
+        "p50": 1538.8,
+        "p95": 1764.4,
+        "p99": 2114.6,
+        "mean": 1581.1
+      },
+      "10": {
+        "concurrency": 10,
+        "total_requests": 100,
+        "successful": 100,
+        "errors": 0,
+        "wall_time_ms": 18617.0,
+        "throughput_rps": 5.4,
+        "p50": 1417.9,
+        "p95": 5664.2,
+        "p99": 5956.1,
+        "mean": 1769.9
+      },
+      "50": {
+        "concurrency": 50,
+        "total_requests": 100,
+        "successful": 96,
+        "errors": 4,
+        "wall_time_ms": 6936.1,
+        "throughput_rps": 13.8,
+        "p50": 1595.3,
+        "p95": 5065.8,
+        "p99": 5257.3,
+        "mean": 2767.8
+      },
+      "100": {
+        "concurrency": 100,
+        "total_requests": 100,
+        "successful": 89,
+        "errors": 11,
+        "wall_time_ms": 5884.5,
+        "throughput_rps": 15.1,
+        "p50": 1702.1,
+        "p95": 5116.0,
+        "p99": 5550.0,
+        "mean": 2819.8
+      }
+    }
+  }
+}

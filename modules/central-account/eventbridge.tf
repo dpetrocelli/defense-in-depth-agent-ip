@@ -227,10 +227,9 @@ resource "aws_cloudwatch_log_metric_filter" "security_alerts" {
   log_group_name = aws_cloudwatch_log_group.event_archive.name
 
   metric_transformation {
-    name          = "SecurityAlerts"
-    namespace     = "${var.project_name}/CentralMonitoring"
-    value         = "1"
-    default_value = "0"
+    name      = "SecurityAlerts"
+    namespace = "${var.project_name}/CentralMonitoring"
+    value     = "1"
     dimensions = {
       AccountId = "$.account"
     }
@@ -244,10 +243,9 @@ resource "aws_cloudwatch_log_metric_filter" "injection_attempts" {
   log_group_name = aws_cloudwatch_log_group.event_archive.name
 
   metric_transformation {
-    name          = "InjectionAttempts"
-    namespace     = "${var.project_name}/CentralMonitoring"
-    value         = "1"
-    default_value = "0"
+    name      = "InjectionAttempts"
+    namespace = "${var.project_name}/CentralMonitoring"
+    value     = "1"
     dimensions = {
       AccountId = "$.account"
     }
@@ -261,10 +259,9 @@ resource "aws_cloudwatch_log_metric_filter" "api_requests" {
   log_group_name = aws_cloudwatch_log_group.event_archive.name
 
   metric_transformation {
-    name          = "ApiRequests"
-    namespace     = "${var.project_name}/CentralMonitoring"
-    value         = "1"
-    default_value = "0"
+    name      = "ApiRequests"
+    namespace = "${var.project_name}/CentralMonitoring"
+    value     = "1"
     dimensions = {
       AccountId = "$.account"
     }
@@ -278,10 +275,9 @@ resource "aws_cloudwatch_log_metric_filter" "lambda_errors" {
   log_group_name = aws_cloudwatch_log_group.event_archive.name
 
   metric_transformation {
-    name          = "LambdaErrors"
-    namespace     = "${var.project_name}/CentralMonitoring"
-    value         = "1"
-    default_value = "0"
+    name      = "LambdaErrors"
+    namespace = "${var.project_name}/CentralMonitoring"
+    value     = "1"
     dimensions = {
       AccountId = "$.account"
     }
