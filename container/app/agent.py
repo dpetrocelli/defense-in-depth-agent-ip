@@ -13,40 +13,53 @@ Security features:
 Includes demo tools to demonstrate Strands tool-calling capabilities.
 """
 
-import os
+import hashlib
 import json
 import logging
-import hashlib
+import os
 import urllib.request
 from datetime import datetime, timezone
+
 import boto3
 from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 
 from app.response_filter import (
     filter_response,
-    sanitize_user_input,
     get_defensive_prompt,
+    sanitize_user_input,
     validate_input_comprehensive,
-    calculate_injection_risk
 )
 
 logger = logging.getLogger(__name__)
 
 # Feature flags
-USE_GATEKEEPER = os.environ.get('USE_GATEKEEPER', 'true').lower() == 'true'
-ENABLE_RESPONSE_FILTER = os.environ.get('ENABLE_RESPONSE_FILTER', 'true').lower() == 'true'
-ENABLE_PREFLIGHT_CHECK = os.environ.get('ENABLE_PREFLIGHT_CHECK', 'true').lower() == 'true'
-ENABLE_WATERMARKING = os.environ.get('ENABLE_WATERMARKING', 'true').lower() == 'true'
-ENABLE_INPUT_VALIDATION = os.environ.get('ENABLE_INPUT_VALIDATION', 'true').lower() == 'true'
-BLOCK_HIGH_RISK_INPUTS = os.environ.get('BLOCK_HIGH_RISK_INPUTS', 'true').lower() == 'true'
-CANARY_WEBHOOK_URL = os.environ.get('CANARY_WEBHOOK_URL', '')  # Optional: URL to ping if prompt leaks
-EXPECTED_PROMPT_HASH = os.environ.get('EXPECTED_PROMPT_HASH', '')  # Optional: hash to validate prompts weren't tampered
+USE_GATEKEEPER = os.environ.get("USE_GATEKEEPER", "true").lower() == "true"
+ENABLE_RESPONSE_FILTER = (
+    os.environ.get("ENABLE_RESPONSE_FILTER", "true").lower() == "true"
+)
+ENABLE_PREFLIGHT_CHECK = (
+    os.environ.get("ENABLE_PREFLIGHT_CHECK", "true").lower() == "true"
+)
+ENABLE_WATERMARKING = os.environ.get("ENABLE_WATERMARKING", "true").lower() == "true"
+ENABLE_INPUT_VALIDATION = (
+    os.environ.get("ENABLE_INPUT_VALIDATION", "true").lower() == "true"
+)
+BLOCK_HIGH_RISK_INPUTS = (
+    os.environ.get("BLOCK_HIGH_RISK_INPUTS", "true").lower() == "true"
+)
+CANARY_WEBHOOK_URL = os.environ.get(
+    "CANARY_WEBHOOK_URL", ""
+)  # Optional: URL to ping if prompt leaks
+EXPECTED_PROMPT_HASH = os.environ.get(
+    "EXPECTED_PROMPT_HASH", ""
+)  # Optional: hash to validate prompts weren't tampered
 
 
 # =============================================================================
 # Security: Pre-flight Compliance Check
 # =============================================================================
+
 
 def check_bedrock_logging_disabled() -> bool:
     """
@@ -57,17 +70,21 @@ def check_bedrock_logging_disabled() -> bool:
         True if safe (logging disabled), False if unsafe (logging enabled)
     """
     try:
-        bedrock_client = boto3.client('bedrock')
+        bedrock_client = boto3.client("bedrock")
         response = bedrock_client.get_model_invocation_logging_configuration()
 
-        logging_config = response.get('loggingConfig', {})
+        logging_config = response.get("loggingConfig", {})
 
         # Check if any logging is enabled
-        cloudwatch_enabled = logging_config.get('cloudWatchConfig', {}).get('logGroupName')
-        s3_enabled = logging_config.get('s3Config', {}).get('bucketName')
+        cloudwatch_enabled = logging_config.get("cloudWatchConfig", {}).get(
+            "logGroupName"
+        )
+        s3_enabled = logging_config.get("s3Config", {}).get("bucketName")
 
         if cloudwatch_enabled or s3_enabled:
-            logger.error("SECURITY VIOLATION: Bedrock model invocation logging is ENABLED!")
+            logger.error(
+                "SECURITY VIOLATION: Bedrock model invocation logging is ENABLED!"
+            )
             logger.error(f"CloudWatch: {cloudwatch_enabled}, S3: {s3_enabled}")
             logger.error("Refusing to start - prompts would be exposed to logs")
             return False
@@ -76,15 +93,17 @@ def check_bedrock_logging_disabled() -> bool:
         return True
 
     except Exception as e:
-        # If we can't check, log warning but continue (might not have permission)
-        logger.warning(f"Could not verify Bedrock logging status: {e}")
-        logger.warning("Continuing with caution - ensure logging is disabled")
-        return True  # Don't block if we can't check
+        # Fail-closed: if we cannot verify logging is disabled, assume unsafe.
+        # The Lambda role MUST include bedrock:GetModelInvocationLoggingConfiguration.
+        logger.error(f"Could not verify Bedrock logging status: {e}")
+        logger.error("Fail-closed: refusing to start without logging verification")
+        return False
 
 
 # =============================================================================
 # Security: Canary Token
 # =============================================================================
+
 
 def generate_canary_token(account_id: str) -> str:
     """
@@ -103,6 +122,7 @@ def generate_canary_token(account_id: str) -> str:
 # Security: Response Watermarking
 # =============================================================================
 
+
 def generate_watermark(account_id: str, session_id: str, request_id: str) -> str:
     """
     Generate an invisible watermark to embed in responses.
@@ -117,14 +137,27 @@ def generate_watermark(account_id: str, session_id: str, request_id: str) -> str
     # Encode as zero-width characters (invisible in most displays)
     # Using: \u200b (zero-width space), \u200c (zero-width non-joiner), \u200d (zero-width joiner)
     watermark = ""
-    char_map = {'0': '\u200b', '1': '\u200c', '2': '\u200d', '3': '\u200b\u200b',
-                '4': '\u200b\u200c', '5': '\u200b\u200d', '6': '\u200c\u200b',
-                '7': '\u200c\u200c', '8': '\u200c\u200d', '9': '\u200d\u200b',
-                'a': '\u200d\u200c', 'b': '\u200d\u200d', 'c': '\u200b\u200b\u200b',
-                'd': '\u200b\u200b\u200c', 'e': '\u200b\u200b\u200d', 'f': '\u200b\u200c\u200b'}
+    char_map = {
+        "0": "\u200b",
+        "1": "\u200c",
+        "2": "\u200d",
+        "3": "\u200b\u200b",
+        "4": "\u200b\u200c",
+        "5": "\u200b\u200d",
+        "6": "\u200c\u200b",
+        "7": "\u200c\u200c",
+        "8": "\u200c\u200d",
+        "9": "\u200d\u200b",
+        "a": "\u200d\u200c",
+        "b": "\u200d\u200d",
+        "c": "\u200b\u200b\u200b",
+        "d": "\u200b\u200b\u200c",
+        "e": "\u200b\u200b\u200d",
+        "f": "\u200b\u200c\u200b",
+    }
 
     for char in payload_hash:
-        watermark += char_map.get(char, '')
+        watermark += char_map.get(char, "")
 
     return watermark
 
@@ -135,18 +168,31 @@ def decode_watermark(text: str) -> str:
     Returns the hash that can be correlated with logs.
     """
     # Reverse mapping
-    char_map = {'\u200b': '0', '\u200c': '1', '\u200d': '2', '\u200b\u200b': '3',
-                '\u200b\u200c': '4', '\u200b\u200d': '5', '\u200c\u200b': '6',
-                '\u200c\u200c': '7', '\u200c\u200d': '8', '\u200d\u200b': '9',
-                '\u200d\u200c': 'a', '\u200d\u200d': 'b', '\u200b\u200b\u200b': 'c',
-                '\u200b\u200b\u200c': 'd', '\u200b\u200b\u200d': 'e', '\u200b\u200c\u200b': 'f'}
+    char_map = {
+        "\u200b": "0",
+        "\u200c": "1",
+        "\u200d": "2",
+        "\u200b\u200b": "3",
+        "\u200b\u200c": "4",
+        "\u200b\u200d": "5",
+        "\u200c\u200b": "6",
+        "\u200c\u200c": "7",
+        "\u200c\u200d": "8",
+        "\u200d\u200b": "9",
+        "\u200d\u200c": "a",
+        "\u200d\u200d": "b",
+        "\u200b\u200b\u200b": "c",
+        "\u200b\u200b\u200c": "d",
+        "\u200b\u200b\u200d": "e",
+        "\u200b\u200c\u200b": "f",
+    }
 
     decoded = ""
     i = 0
     while i < len(text):
         # Try 3-char sequences first, then 2-char, then 1-char
         for length in [3, 2, 1]:
-            seq = text[i:i+length]
+            seq = text[i : i + length]
             if seq in char_map:
                 decoded += char_map[seq]
                 i += length
@@ -161,14 +207,15 @@ def decode_watermark(text: str) -> str:
 # Security: Prompt Hash Validation
 # =============================================================================
 
+
 def compute_prompt_hash(prompts: dict) -> str:
     """
     Compute a hash of the prompts for integrity validation.
     This helps detect if prompts were tampered with during transit.
     """
     # Normalize and hash the prompts
-    system = prompts.get('system_prompt', '')
-    instruction = prompts.get('instruction_prompt', '')
+    system = prompts.get("system_prompt", "")
+    instruction = prompts.get("instruction_prompt", "")
     combined = f"{system}|{instruction}"
     return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
@@ -185,7 +232,9 @@ def validate_prompt_hash(prompts: dict, expected_hash: str) -> bool:
     actual_hash = compute_prompt_hash(prompts)
 
     if actual_hash != expected_hash:
-        logger.error(f"SECURITY: Prompt hash mismatch! Expected {expected_hash}, got {actual_hash}")
+        logger.error(
+            f"SECURITY: Prompt hash mismatch! Expected {expected_hash}, got {actual_hash}"
+        )
         logger.error("Prompts may have been tampered with during transit!")
         return False
 
@@ -198,24 +247,26 @@ def report_canary_leak(canary_token: str, context: str = "unknown"):
     Report if a canary token is detected in output (potential leak).
     """
     if not CANARY_WEBHOOK_URL:
-        logger.warning(f"CANARY LEAK DETECTED but no webhook configured: {canary_token}")
+        logger.warning(
+            f"CANARY LEAK DETECTED but no webhook configured: {canary_token}"
+        )
         return
 
     try:
-        data = json.dumps({
-            "alert": "CANARY_LEAK_DETECTED",
-            "canary_token": canary_token,
-            "context": context,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }).encode('utf-8')
+        data = json.dumps(
+            {
+                "alert": "CANARY_LEAK_DETECTED",
+                "canary_token": canary_token,
+                "context": context,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(
-            CANARY_WEBHOOK_URL,
-            data=data,
-            headers={'Content-Type': 'application/json'}
+            CANARY_WEBHOOK_URL, data=data, headers={"Content-Type": "application/json"}
         )
         urllib.request.urlopen(req, timeout=5)
-        logger.warning(f"Canary leak reported to webhook")
+        logger.warning("Canary leak reported to webhook")
     except Exception as e:
         logger.error(f"Failed to report canary leak: {e}")
 
@@ -223,6 +274,7 @@ def report_canary_leak(canary_token: str, context: str = "unknown"):
 # =============================================================================
 # Demo Tools - Demonstrate Strands tool-calling capabilities
 # =============================================================================
+
 
 @tool
 def calculator(operation: str, a: float, b: float) -> str:
@@ -242,7 +294,7 @@ def calculator(operation: str, a: float, b: float) -> str:
         "subtract": lambda x, y: x - y,
         "multiply": lambda x, y: x * y,
         "divide": lambda x, y: x / y if y != 0 else "Error: Division by zero",
-        "power": lambda x, y: x ** y,
+        "power": lambda x, y: x**y,
         "modulo": lambda x, y: x % y if y != 0 else "Error: Modulo by zero",
     }
 
@@ -342,7 +394,7 @@ class ProtectedAgent:
         secret_arn: str = None,
         gatekeeper_url: str = None,
         model_id: str = "amazon.nova-lite-v1:0",
-        region: str = "us-east-1"
+        region: str = "us-east-1",
     ):
         self.model_id = model_id
         self.region = region
@@ -377,25 +429,30 @@ class ProtectedAgent:
                 )
 
         # =================================================================
-        # SECURITY: Generate and embed canary token
+        # SECURITY: Cache account ID (used for canary, watermark, audit)
         # =================================================================
         try:
-            sts = boto3.client('sts')
-            account_id = sts.get_caller_identity()['Account']
+            sts = boto3.client("sts")
+            self._account_id = sts.get_caller_identity()["Account"]
         except Exception:
-            account_id = "unknown"
+            self._account_id = "unknown"
 
-        self._canary_token = generate_canary_token(account_id)
+        # =================================================================
+        # SECURITY: Generate and embed canary token
+        # =================================================================
+        self._canary_token = generate_canary_token(self._account_id)
 
         # Apply defensive prompt additions to resist prompt injection
-        base_prompt = prompts.get('system_prompt', '')
+        base_prompt = prompts.get("system_prompt", "")
 
         # Embed canary token in prompt (invisible to users but trackable if leaked)
-        prompt_with_canary = f"{self._canary_token}\n{base_prompt}\n{self._canary_token}"
+        prompt_with_canary = (
+            f"{self._canary_token}\n{base_prompt}\n{self._canary_token}"
+        )
 
         self._system_prompt = get_defensive_prompt(prompt_with_canary)
         self._system_prompt_raw = base_prompt  # Keep raw for response filtering
-        self._instruction_prompt = prompts.get('instruction_prompt', '')
+        self._instruction_prompt = prompts.get("instruction_prompt", "")
         self._request_counter = 0  # For generating unique request IDs
         logger.info("Prompts loaded into memory (with defensive additions + canary)")
 
@@ -426,47 +483,48 @@ class ProtectedAgent:
         """
         Fetch prompts directly from Secrets Manager.
 
-        This is the fallback method for development/testing.
-        In production, use the gatekeeper for better security.
+        WARNING: This bypasses the gatekeeper security boundary and should
+        ONLY be used in local development. In production, the gatekeeper
+        ensures prompts are never accessible from the customer account.
         """
-        try:
-            logger.warning("Using direct Secrets Manager access (less secure)")
-            secrets_client = boto3.client(
-                'secretsmanager',
-                region_name=self.region
+        if os.environ.get("ENVIRONMENT", "production") == "production":
+            raise RuntimeError(
+                "SECURITY: Direct Secrets Manager access is disabled in production. "
+                "Use the gatekeeper (USE_GATEKEEPER=true) for secure prompt delivery."
             )
 
-            response = secrets_client.get_secret_value(SecretId=secret_arn)
-            return json.loads(response['SecretString'])
+        try:
+            logger.warning(
+                "DEV MODE: Using direct Secrets Manager access (NOT for production)"
+            )
+            secrets_client = boto3.client("secretsmanager", region_name=self.region)
 
-        except Exception as e:
-            logger.error(f"Failed to fetch prompts from Secrets Manager: {e}")
+            response = secrets_client.get_secret_value(SecretId=secret_arn)
+            return json.loads(response["SecretString"])
+
+        except Exception:
+            logger.error("Failed to fetch prompts from Secrets Manager")
             raise RuntimeError("Cannot initialize agent: prompts unavailable")
 
     def _create_agent(self) -> Agent:
         """Create a Strands agent with the protected system prompt and tools."""
         # Configure Bedrock model
-        model = BedrockModel(
-            model_id=self.model_id,
-            region_name=self.region
-        )
+        model = BedrockModel(model_id=self.model_id, region_name=self.region)
 
         # Create agent with system prompt (never exposed) and demo tools
         agent = Agent(
             model=model,
             system_prompt=self._system_prompt,
-            tools=DEMO_TOOLS  # Register demo tools for tool-calling
+            tools=DEMO_TOOLS,  # Register demo tools for tool-calling
         )
 
-        logger.info(f"Agent created with {len(DEMO_TOOLS)} tools: {[t.__name__ for t in DEMO_TOOLS]}")
+        logger.info(
+            f"Agent created with {len(DEMO_TOOLS)} tools: {[t.__name__ for t in DEMO_TOOLS]}"
+        )
 
         return agent
 
-    async def invoke(
-        self,
-        message: str,
-        session_id: str = "default"
-    ) -> str:
+    async def invoke(self, message: str, session_id: str = "default") -> str:
         """
         Invoke the agent with a user message.
 
@@ -481,16 +539,16 @@ class ProtectedAgent:
         try:
             # Generate unique request ID for this invocation
             self._request_counter += 1
-            request_id = f"{session_id}-{self._request_counter}-{datetime.now().timestamp()}"
+            request_id = (
+                f"{session_id}-{self._request_counter}-{datetime.now().timestamp()}"
+            )
 
             # Log request for audit trail (watermark correlation)
-            try:
-                sts = boto3.client('sts')
-                account_id = sts.get_caller_identity()['Account']
-            except Exception:
-                account_id = "unknown"
+            account_id = self._account_id
 
-            logger.info(f"AUDIT: Request {request_id} from account {account_id}, session {session_id}")
+            logger.info(
+                f"AUDIT: Request {request_id} from account {account_id}, session {session_id}"
+            )
 
             # =================================================================
             # SECURITY: Comprehensive input validation (before any processing)
@@ -498,19 +556,28 @@ class ProtectedAgent:
             if ENABLE_INPUT_VALIDATION:
                 validation = validate_input_comprehensive(message)
 
-                logger.info(f"Input validation: risk_level={validation['risk_level']}, "
-                           f"score={validation.get('risk_score', 0)}, issues={len(validation['issues'])}")
+                logger.info(
+                    f"Input validation: risk_level={validation['risk_level']}, "
+                    f"score={validation.get('risk_score', 0)}, issues={len(validation['issues'])}"
+                )
 
                 # Block high-risk and critical-risk inputs
-                if BLOCK_HIGH_RISK_INPUTS and validation['risk_level'] in ['critical', 'high']:
-                    logger.warning(f"BLOCKED: High-risk input detected. "
-                                  f"Level: {validation['risk_level']}, "
-                                  f"Indicators: {validation['issues']}")
+                if BLOCK_HIGH_RISK_INPUTS and validation["risk_level"] in [
+                    "critical",
+                    "high",
+                ]:
+                    logger.warning(
+                        f"BLOCKED: High-risk input detected. "
+                        f"Level: {validation['risk_level']}, "
+                        f"Indicators: {validation['issues']}"
+                    )
                     return "I'm happy to help with other questions!"
 
                 # Log medium-risk inputs but allow them through
-                if validation['risk_level'] == 'medium':
-                    logger.warning(f"SUSPICIOUS: Medium-risk input. Indicators: {validation['issues']}")
+                if validation["risk_level"] == "medium":
+                    logger.warning(
+                        f"SUSPICIOUS: Medium-risk input. Indicators: {validation['issues']}"
+                    )
 
             # Sanitize user input to reduce prompt injection risk
             sanitized_message = sanitize_user_input(message)
@@ -518,7 +585,9 @@ class ProtectedAgent:
             # Combine instruction prompt with user message if available
             full_message = sanitized_message
             if self._instruction_prompt:
-                full_message = f"{self._instruction_prompt}\n\nUser: {sanitized_message}"
+                full_message = (
+                    f"{self._instruction_prompt}\n\nUser: {sanitized_message}"
+                )
 
             # Call the Strands agent
             response = self._agent(full_message)
@@ -528,18 +597,19 @@ class ProtectedAgent:
             # SECURITY: Check for canary token leak
             # =================================================================
             if self._canary_token and self._canary_token in response_text:
-                logger.error("CRITICAL: Canary token detected in response - PROMPT LEAKED!")
+                logger.error(
+                    "CRITICAL: Canary token detected in response - PROMPT LEAKED!"
+                )
                 report_canary_leak(self._canary_token, "model_response")
                 return "I'm happy to help with other questions!"
 
             # Filter response to detect prompt leakage
             if ENABLE_RESPONSE_FILTER:
                 filtered_response, was_filtered = filter_response(
-                    response_text,
-                    self._system_prompt_raw
+                    response_text, self._system_prompt_raw
                 )
                 if was_filtered:
-                    logger.warning(f"Response filtered due to potential prompt leakage")
+                    logger.warning("Response filtered due to potential prompt leakage")
                 response_text = filtered_response
 
             # =================================================================
@@ -547,8 +617,28 @@ class ProtectedAgent:
             # =================================================================
             if ENABLE_WATERMARKING:
                 watermark = generate_watermark(account_id, session_id, request_id)
-                # Insert watermark at strategic points (harder to strip)
-                response_text = f"{watermark}{response_text}{watermark}"
+                # Insert watermark between random words to resist naive stripping.
+                # Splitting at word boundaries and reinserting makes the ZWC chars
+                # appear at natural positions rather than predictable start/end.
+                words = response_text.split(" ")
+                if len(words) > 4:
+                    import random
+
+                    # Distribute watermark chars across 3 random word boundaries
+                    chunk_len = max(1, len(watermark) // 3)
+                    wm_parts = [
+                        watermark[:chunk_len],
+                        watermark[chunk_len : chunk_len * 2],
+                        watermark[chunk_len * 2 :],
+                    ]
+                    positions = sorted(
+                        random.sample(range(1, len(words)), min(3, len(words) - 1))
+                    )
+                    for pos, wm_part in zip(reversed(positions), reversed(wm_parts)):
+                        words[pos] = wm_part + words[pos]
+                    response_text = " ".join(words)
+                else:
+                    response_text = f"{watermark}{response_text}"
                 logger.debug(f"Response watermarked for request {request_id}")
 
             return response_text

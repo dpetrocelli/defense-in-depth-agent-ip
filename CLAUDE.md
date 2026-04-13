@@ -78,13 +78,17 @@ terraform init && terraform apply
 ```bash
 cd container
 # Get signing key from central terraform output
-export SIGNING_KEY=$(cd ../environments/central && terraform output -raw gatekeeper_signing_key)
-export GATEKEEPER_URL=$(cd ../environments/central && terraform output -raw gatekeeper_url)
+cd ../environments/central && terraform output -raw gatekeeper_signing_key > /tmp/.signing_key
+export GATEKEEPER_URL=$(terraform output -raw gatekeeper_url)
+cd ../../container
 
-docker build \
-  --build-arg GATEKEEPER_URL=$GATEKEEPER_URL \
-  --build-arg SIGNING_KEY=$SIGNING_KEY \
+# Build with BuildKit secret mount (key never appears in image layers or history)
+DOCKER_BUILDKIT=1 docker buildx build \
+  --secret id=signing_key,src=/tmp/.signing_key \
   -t bedrock-protected-agent .
+
+# Clean up signing key from disk
+rm -f /tmp/.signing_key
 
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ECR_URL>
 docker tag bedrock-protected-agent:latest <ECR_URL>:v1
