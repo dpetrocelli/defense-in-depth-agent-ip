@@ -131,14 +131,29 @@ python3 tools/fp_test.py
 ## Cleanup
 
 ```bash
-# Client first
-cd environments/client && terraform destroy
+# 1. Client first (destroys agent, API gateway, event forwarding)
+cd environments/client && terraform destroy -auto-approve
 
-# Then central
-cd ../central && terraform destroy
+# 2. Then central (destroys gatekeeper, secrets, ECR, monitoring)
+cd ../central && terraform destroy -auto-approve
 
-# Delete pre-created role
-aws iam delete-role --role-name <project_name>-lambda-execution --profile <client-profile>
+# 3. Delete pre-created role (must detach policies first)
+aws iam detach-role-policy \
+  --role-name <project_name>-lambda-execution \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole \
+  --profile <client-profile>
+
+aws iam delete-role-policy \
+  --role-name <project_name>-lambda-execution \
+  --policy-name <project_name>-lambda-execution-policy \
+  --profile <client-profile>
+
+aws iam delete-role \
+  --role-name <project_name>-lambda-execution \
+  --profile <client-profile>
+
+# 4. Stop local stack (if running)
+cd ../../local && docker compose down -v
 ```
 
 ## Troubleshooting
