@@ -17,7 +17,7 @@ WORKDIR /var/task
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir "openai>=1.0.0" "litellm>=1.0.0"
+    pip install --no-cache-dir "openai>=1.0.0" "litellm>=1.0.0" "ollama>=0.4.0"
 
 # Copy application code
 COPY app/ ./app/

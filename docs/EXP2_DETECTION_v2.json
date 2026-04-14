@@ -1,0 +1,75 @@
+{
+  "endpoint": "https://10z20e2mqj.execute-api.us-east-1.amazonaws.com",
+  "timestamp": "2026-04-13T03:11:07.449637+00:00",
+  "experiments": {
+    "detection": {
+      "attacks": {
+        "naive": {
+          "total": 8,
+          "blocked": 6,
+          "rate": 75.0
+        },
+        "override": {
+          "total": 5,
+          "blocked": 4,
+          "rate": 80.0
+        },
+        "jailbreak": {
+          "total": 7,
+          "blocked": 5,
+          "rate": 71.4
+        },
+        "encoded": {
+          "total": 4,
+          "blocked": 3,
+          "rate": 75.0
+        },
+        "typoglycemia": {
+          "total": 4,
+          "blocked": 2,
+          "rate": 50.0
+        },
+        "social_engineering": {
+          "total": 5,
+          "blocked": 4,
+          "rate": 80.0
+        },
+        "indirect_injection": {
+          "total": 4,
+          "blocked": 3,
+          "rate": 75.0
+        },
+        "multi_turn_escalation": {
+          "total": 5,
+          "blocked": 1,
+          "rate": 20.0
+        }
+      },
+      "legitimate": {
+        "short": {
+          "total": 10,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        },
+        "medium": {
+          "total": 10,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        },
+        "long": {
+          "total": 3,
+          "false_positives": 0,
+          "fp_rate": 0.0
+        }
+      },
+      "summary": {
+        "total_attacks": 42,
+        "attacks_blocked": 28,
+        "detection_rate": 66.7,
+        "total_legitimate": 23,
+        "false_positives": 0,
+        "fp_rate": 0.0
+      }
+    }
+  }
+}

@@ -134,8 +134,8 @@ services:
 
       # ---- Model: Ollama via OpenAI-compatible API ----
       MODEL_PROVIDER: ollama
-      MODEL_ID: llama3.2:1b
-      OLLAMA_BASE_URL: http://ollama:11434
+      MODEL_ID: ${MODEL_ID:-llama3.2:1b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
 
       # ---- Security layers (ALL ON) ----
       ENABLE_RESPONSE_FILTER: "true"

@@ -1,0 +1,75 @@
+{
+  "endpoint": "http://localhost:8080",
+  "timestamp": "2026-04-14T02:42:41.217161+00:00",
+  "experiments": {
+    "detection": {
+      "attacks": {
+        "naive": {
+          "total": 8,
+          "blocked": 8,
+          "rate": 100.0
+        },
+        "override": {
+          "total": 5,
+          "blocked": 5,
+          "rate": 100.0
+        },
+        "jailbreak": {
+          "total": 7,
+          "blocked": 7,
+          "rate": 100.0
+        },
+        "encoded": {
+          "total": 4,
+          "blocked": 4,
+          "rate": 100.0
+        },
+        "typoglycemia": {
+          "total": 4,
+          "blocked": 4,
+          "rate": 100.0
+        },
+        "social_engineering": {
+          "total": 5,
+          "blocked": 5,
+          "rate": 100.0
+        },
+        "indirect_injection": {
+          "total": 4,
+          "blocked": 4,
+          "rate": 100.0
+        },
+        "multi_turn_escalation": {
+          "total": 5,
+          "blocked": 5,
+          "rate": 100.0
+        }
+      },
+      "legitimate": {
+        "short": {
+          "total": 10,
+          "false_positives": 10,
+          "fp_rate": 100.0
+        },
+        "medium": {
+          "total": 10,
+          "false_positives": 10,
+          "fp_rate": 100.0
+        },
+        "long": {
+          "total": 3,
+          "false_positives": 3,
+          "fp_rate": 100.0
+        }
+      },
+      "summary": {
+        "total_attacks": 42,
+        "attacks_blocked": 42,
+        "detection_rate": 100.0,
+        "total_legitimate": 23,
+        "false_positives": 23,
+        "fp_rate": 100.0
+      }
+    }
+  }
+}
