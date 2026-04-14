@@ -1,0 +1,167 @@
+# =============================================================================
+# Multi-Account Local Stack — Simulates two AWS accounts
+# =============================================================================
+# Architecture (mirrors production):
+#
+#   localstack-central  (Account A: 111222333444)
+#     - Lambda: gatekeeper function (same code as production)
+#     - API Gateway: HTTP endpoint for the gatekeeper Lambda
+#     - Secrets Manager: stores agent prompts
+#     - SNS + SQS: cross-account security alerts (L4)
+#     - KMS: key management
+#
+#   localstack-client   (Account B: 555666777888)
+#     - STS: returns client account identity
+#
+#   agent               (Runs in Account B)
+#     - FastAPI app with all 4 security layers active:
+#       L1: HMAC gatekeeper authentication (USE_GATEKEEPER=true)
+#       L2: Input validation + risk scoring
+#       L3: Defensive prompt + response filtering + canary tokens
+#       L4: Watermarking + audit logging + cross-account alerts
+#
+#   ollama              (Shared — local LLM)
+#
+# Usage:
+#   cd local/
+#   docker compose -f docker-compose.multi-account.yml up -d --build
+#   ./setup-multi-account.sh
+#   # Agent starts automatically after setup provisions Lambda + API Gateway
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Central Account — Lambda, API Gateway, Secrets Manager, SNS, SQS, KMS
+  # ---------------------------------------------------------------------------
+  localstack-central:
+    image: localstack/localstack:3.4
+    container_name: central-account
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=lambda,apigateway,secretsmanager,sns,sqs,kms,sts
+      - DEBUG=0
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - central-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - multi-account
+
+  # ---------------------------------------------------------------------------
+  # Client Account — STS only (identity boundary)
+  # ---------------------------------------------------------------------------
+  localstack-client:
+    image: localstack/localstack:3.4
+    container_name: client-account
+    ports:
+      - "4577:4566"
+    environment:
+      - SERVICES=sts
+      - DEBUG=0
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - client-data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - multi-account
+
+  # ---------------------------------------------------------------------------
+  # Ollama — local LLM server
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-multi
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+      - ./ollama-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q llama3.2"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+    networks:
+      - multi-account
+
+  # ---------------------------------------------------------------------------
+  # Agent — FastAPI app with ALL 4 security layers active (client account)
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: ../container
+      dockerfile: Dockerfile.local
+    container_name: agent-multi
+    ports:
+      - "8080:8080"
+    environment:
+      # ---- AWS / LocalStack config (client account) ----
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack-client:4566
+
+      # ---- L1: Gatekeeper authentication ----
+      USE_GATEKEEPER: "true"
+      GATEKEEPER_URL: ${GATEKEEPER_URL:-http://localstack-central:4566/restapis/placeholder/prod/_user_request_/prompts}
+      GATEKEEPER_SIGNING_KEY: ${SIGNING_KEY:-changeme-generate-with-setup-script}
+      CLIENT_ACCOUNT_ID: "555666777888"
+
+      # ---- Dev mode flags ----
+      ENVIRONMENT: development
+      ENABLE_PREFLIGHT_CHECK: "false"
+
+      # ---- Model: Ollama via OpenAI-compatible API ----
+      MODEL_PROVIDER: ollama
+      MODEL_ID: llama3.2:1b
+      OLLAMA_BASE_URL: http://ollama:11434
+
+      # ---- Security layers (ALL ON) ----
+      ENABLE_RESPONSE_FILTER: "true"
+      ENABLE_WATERMARKING: "true"
+      ENABLE_INPUT_VALIDATION: "true"
+      BLOCK_HIGH_RISK_INPUTS: "true"
+
+    env_file:
+      - path: ./.env.multi
+        required: false
+    depends_on:
+      localstack-client:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./agent_local.py:/var/task/app/agent.py:ro
+    networks:
+      - multi-account
+    restart: on-failure
+
+volumes:
+  central-data:
+  client-data:
+  ollama-models:
+
+networks:
+  multi-account:
+    driver: bridge

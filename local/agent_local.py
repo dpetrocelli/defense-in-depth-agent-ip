@@ -9,7 +9,8 @@ Drop-in replacement for container/app/agent.py that:
   3. Points boto3 clients at LocalStack (via AWS_ENDPOINT_URL)
 
 All security layers remain active:
-  - L2: Input validation + sanitization  (response_filter.py)
+  - L1: HMAC gatekeeper authentication    (gatekeeper_client.py)
+  - L2: Input validation + sanitization   (response_filter.py)
   - L3: Response filtering + canary tokens (response_filter.py)
   - L4: Watermarking + audit logging      (this file)
 
@@ -61,6 +62,27 @@ EXPECTED_PROMPT_HASH = os.environ.get("EXPECTED_PROMPT_HASH", "")
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "ollama")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
 MODEL_ID = os.environ.get("MODEL_ID", "llama3.2:1b")
+
+# Multi-account simulation: override the account ID returned by STS
+# so the agent identifies as the client account (875228160179)
+CLIENT_ACCOUNT_ID = os.environ.get("CLIENT_ACCOUNT_ID", "")
+
+if CLIENT_ACCOUNT_ID:
+    try:
+        from app.gatekeeper_client import GatekeeperClient
+
+        _original_get_account_id = GatekeeperClient._get_account_id
+
+        def _local_get_account_id(self):
+            logger.info(f"Using local account ID override: {CLIENT_ACCOUNT_ID}")
+            return CLIENT_ACCOUNT_ID
+
+        GatekeeperClient._get_account_id = _local_get_account_id
+        logger.info(
+            f"GatekeeperClient patched with CLIENT_ACCOUNT_ID={CLIENT_ACCOUNT_ID}"
+        )
+    except ImportError:
+        logger.warning("GatekeeperClient not available for patching")
 
 
 # =============================================================================
@@ -383,12 +405,16 @@ class ProtectedAgent:
             if not validate_prompt_hash(prompts, EXPECTED_PROMPT_HASH):
                 raise RuntimeError("SECURITY VIOLATION: Prompt hash validation failed!")
 
-        # Account ID (via LocalStack STS)
-        try:
-            sts = boto3.client("sts", region_name=region)
-            self._account_id = sts.get_caller_identity()["Account"]
-        except Exception:
-            self._account_id = "000000000000"  # LocalStack default account
+        # Account ID (via CLIENT_ACCOUNT_ID override or LocalStack STS)
+        if CLIENT_ACCOUNT_ID:
+            self._account_id = CLIENT_ACCOUNT_ID
+            logger.info(f"Using CLIENT_ACCOUNT_ID override: {CLIENT_ACCOUNT_ID}")
+        else:
+            try:
+                sts = boto3.client("sts", region_name=region)
+                self._account_id = sts.get_caller_identity()["Account"]
+            except Exception:
+                self._account_id = "000000000000"  # LocalStack default account
 
         # Canary + defensive prompt
         self._canary_token = generate_canary_token(self._account_id)
