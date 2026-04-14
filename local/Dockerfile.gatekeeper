@@ -1,0 +1,20 @@
+# =============================================================================
+# GATEKEEPER SERVICE — Local multi-account simulation
+# =============================================================================
+# Wraps the Lambda gatekeeper logic as a standalone FastAPI service.
+# Simulates the central account's Lambda + API Gateway.
+#
+# Build: docker compose -f docker-compose.multi-account.yml build gatekeeper
+# =============================================================================
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir fastapi uvicorn boto3
+
+COPY gatekeeper_service.py .
+
+EXPOSE 8081
+
+CMD ["uvicorn", "gatekeeper_service:app", "--host", "0.0.0.0", "--port", "8081", "--log-level", "info"]
