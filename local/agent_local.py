@@ -71,7 +71,7 @@ MODEL_ID = os.environ.get("MODEL_ID", "llama3.2:1b")
 USE_LITELLM = os.environ.get("USE_LITELLM", "false").lower() == "true"
 
 # Multi-account simulation: override the account ID returned by STS
-# so the agent identifies as the client account (875228160179)
+# so the agent identifies as the client account (555666777888)
 CLIENT_ACCOUNT_ID = os.environ.get("CLIENT_ACCOUNT_ID", "")
 
 if CLIENT_ACCOUNT_ID:

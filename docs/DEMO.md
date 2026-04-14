@@ -138,17 +138,17 @@ curl -s -X POST $BASE_URL/invoke -H 'Content-Type: application/json' -H "X-API-K
 ## Step 8: Verify Gatekeeper Logs (Central Account)
 
 ```bash
-AWS_PROFILE=AdministratorAccess-190045319446 aws logs tail /aws/lambda/bedrock-protected-gatekeeper --since 5m --region us-east-1
+AWS_PROFILE=AdministratorAccess-111222333444 aws logs tail /aws/lambda/bedrock-protected-gatekeeper --since 5m --region us-east-1
 ```
 
-You should see: `Valid request from account: 875228160179`
+You should see: `Valid request from account: 555666777888`
 
 ---
 
 ## Step 9: Verify Lambda Logs (Client Account)
 
 ```bash
-AWS_PROFILE=AdministratorAccess-875228160179 aws logs tail /aws/lambda/bedrock-protected-agent --since 5m --region us-east-1
+AWS_PROFILE=AdministratorAccess-555666777888 aws logs tail /aws/lambda/bedrock-protected-agent --since 5m --region us-east-1
 ```
 
 You should see:
@@ -198,7 +198,7 @@ GATEKEEPER_URL=https://yebtonu2q9.execute-api.us-east-1.amazonaws.com
 curl -s -X POST $GATEKEEPER_URL/get-prompts \
   -H "X-Timestamp: $(date +%s)" \
   -H "X-Nonce: abc123" \
-  -H "X-Client-Account: 875228160179" \
+  -H "X-Client-Account: 555666777888" \
   -H "X-Signature: fake-signature"
 ```
 
@@ -219,7 +219,7 @@ curl -s -X POST https://yebtonu2q9.execute-api.us-east-1.amazonaws.com/get-promp
   -H 'Content-Type: application/json' \
   -H 'X-Timestamp: 1706000000' \
   -H 'X-Nonce: test123' \
-  -H 'X-Client-Account: 875228160179' \
+  -H 'X-Client-Account: 555666777888' \
   -H 'X-Signature: fake-signature-that-should-fail'
 ```
 
@@ -247,7 +247,7 @@ curl -s -X POST https://yebtonu2q9.execute-api.us-east-1.amazonaws.com/get-promp
   -H 'Content-Type: application/json' \
   -H 'X-Timestamp: 1000000000' \
   -H 'X-Nonce: test123' \
-  -H 'X-Client-Account: 875228160179' \
+  -H 'X-Client-Account: 555666777888' \
   -H 'X-Signature: anything'
 ```
 
@@ -257,9 +257,9 @@ curl -s -X POST https://yebtonu2q9.execute-api.us-east-1.amazonaws.com/get-promp
 
 ```bash
 # Attempt to pull the image from client account
-AWS_PROFILE=AdministratorAccess-875228160179 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 190045319446.dkr.ecr.us-east-1.amazonaws.com
+AWS_PROFILE=AdministratorAccess-555666777888 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 111222333444.dkr.ecr.us-east-1.amazonaws.com
 
-docker pull 190045319446.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent:v7
+docker pull 111222333444.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent:v7
 ```
 
 **Expected:** `Error: pull access denied` or `unauthorized`
@@ -268,7 +268,7 @@ docker pull 190045319446.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent
 
 ```bash
 # Attempt to read prompts directly from client account
-AWS_PROFILE=AdministratorAccess-875228160179 aws secretsmanager get-secret-value \
+AWS_PROFILE=AdministratorAccess-555666777888 aws secretsmanager get-secret-value \
   --secret-id bedrock-protected-prompts \
   --region us-east-1
 ```

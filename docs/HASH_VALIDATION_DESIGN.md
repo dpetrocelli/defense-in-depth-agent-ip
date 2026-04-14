@@ -173,7 +173,7 @@ POST /get-prompts HTTP/1.1
 Host: gatekeeper.execute-api.us-east-1.amazonaws.com
 X-Timestamp: 1706000000
 X-Nonce: a1b2c3d4e5f6g7h8
-X-Client-Account: 875228160179
+X-Client-Account: 555666777888
 X-Signature: 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a
 ```
 
@@ -231,11 +231,11 @@ SIGNING_KEY=$(terraform output -raw gatekeeper_signing_key)
 
 # 3. Build container with embedded key
 cd ../../container
-./build.sh "$SIGNING_KEY" "190045319446.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent" "v1"
+./build.sh "$SIGNING_KEY" "111222333444.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent" "v1"
 
 # 4. Push to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 190045319446.dkr.ecr.us-east-1.amazonaws.com
-docker push 190045319446.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent:v1
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 111222333444.dkr.ecr.us-east-1.amazonaws.com
+docker push 111222333444.dkr.ecr.us-east-1.amazonaws.com/bedrock-protected-agent:v1
 
 # 5. Deploy client account
 cd ../environments/client
