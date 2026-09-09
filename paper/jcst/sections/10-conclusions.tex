@@ -1,0 +1,8 @@
+\section{Conclusions and Future Work}
+\label{sec:conclusions}
+
+This article addressed the protection of AI agent intellectual property in multi-tenant cloud deployments as a cross-domain trust problem and presented a defense-in-depth architecture for it. The composition of cryptographic prompt delivery, OWASP-aligned input validation, output filtering with steganographic watermarking, and cross-account monitoring into a sequential trust chain provides prompt confidentiality, output integrity, and forensic traceability with standard cloud services and without TEEs or specialized hardware. The architecture is cloud-agnostic; its serverless reference implementation, deployed across two separate accounts, showed strong security effectiveness against realistic attack scenarios, a low performance overhead, and a negligible infrastructure cost.
+
+\TODO{Add the conclusions of the multi-model evaluation (RQ1) and of the defense-layer ablation study (RQ2) after the experimental results are available.}
+
+Future work will extend the architecture in several directions: optional integration with TEE-based inference for high-assurance deployments, automated rotation of the HMAC signing key without downtime, formal verification of the security properties of the trust chain, and evaluation against adaptive adversaries. Further directions include redundant watermarking that combines ZWC steganography with token-based schemes~\cite{kirchenbauer2023watermark,synthid2024}, and stateful detection mechanisms for multi-turn interactions.

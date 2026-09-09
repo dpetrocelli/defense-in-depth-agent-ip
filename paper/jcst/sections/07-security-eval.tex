@@ -1,0 +1,99 @@
+\section{Security Evaluation}
+\label{sec:security-eval}
+
+\subsection{Controlled Penetration Testing}
+\label{sec:pentest}
+
+Table~\ref{tab:pentest_results} reports the outcome of the 63 test cases described in Section~\ref{sec:methodology}, grouped by category, together with the OWASP item they exercise and the layer expected to intercept them.
+
+\begin{table}[ht]
+\caption{\label{tab:pentest_results}Penetration test results (63 tests, 100\% pass rate).}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Category} & \textbf{OWASP} & \textbf{Tests} & \textbf{Pass} & \textbf{Layer} \\
+\midrule
+Direct extraction       & LLM01/06 & 8  & 8  & L2+L3 \\
+Multi-turn extraction   & LLM01    & 5  & 5  & L2+L3 \\
+Jailbreak / DAN         & LLM01    & 7  & 7  & L2 \\
+Instruction override    & LLM01    & 6  & 6  & L2 \\
+Prompt injection        & LLM01    & 6  & 6  & L2 \\
+Encoding evasion        & LLM01    & 4  & 4  & L2 \\
+Typoglycemia evasion    & LLM01    & 3  & 3  & L2 \\
+Social engineering      & LLM01    & 5  & 5  & L2 \\
+Output leakage          & LLM02/06 & 6  & 6  & L3 \\
+PII exfiltration        & LLM06    & 4  & 4  & L3 \\
+Response safety         & LLM02    & 5  & 5  & L3 \\
+Replay / auth bypass    & ---      & 4  & 4  & L1 \\
+\midrule
+\textbf{Total}          &          & \textbf{63} & \textbf{63} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All authentication bypass attempts against Layer~1, namely expired timestamps, duplicate nonces, forged signatures, and missing headers, were rejected with Hypertext Transfer Protocol (HTTP)~403 responses that disclosed no information. Layer~2 handled the 44 input-facing tests, which range from naive extraction requests to multi-turn social engineering and encoding evasion; in particular, the typoglycemia detector blocked obfuscated variants that defeat a naive regular-expression approach. Layer~3 provided complementary protection: the sliding-window comparison detected partial leakage of fragments of 50 or more characters that the pattern-based check alone did not capture. Finally, eight tests targeted boundary conditions between layers and confirmed that attacks crafted to lower their Layer~2 score were still mitigated by the Layer~3 mechanisms. The jailbreak category includes the ``Do Anything Now'' (DAN) persona attacks.
+
+\subsection{Live Two-Account Deployment}
+\label{sec:live}
+
+To validate the architecture under realistic conditions, the full four-layer stack was deployed across two separate cloud accounts, vendor and customer, and exposed to the 42 attack queries and the 23 legitimate queries of Section~\ref{sec:corpus}. Table~\ref{tab:live_detection} reports the outcome per category.
+
+\begin{table}[ht]
+\caption{\label{tab:live_detection}Live deployment: attack detection by category (42 attacks, 23 legitimate queries). FP = false positive.}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccl@{}}
+\toprule
+\textbf{Attack category} & \textbf{Blocked} & \textbf{Rate} & \textbf{Defense} \\
+\midrule
+Override commands     & 5/5   & 100\% & L2 (risk score) \\
+Jailbreak / DAN       & 7/7   & 100\% & L2 (risk score) \\
+Encoded payloads      & 4/4   & 100\% & L2 (encoding det.) \\
+Typoglycemia          & 4/4   & 100\% & L2 (typo det.) \\
+Social engineering    & 5/5   & 100\% & L2+L3 \\
+Indirect injection    & 4/4   & 100\% & L2 (structural) \\
+Naive extraction      & 6/8   &  75\% & L2+L3+defensive prompt \\
+Multi-turn            & 3/5   &  60\% & L2+L3 (escalation) \\
+\midrule
+\textbf{Total attacks}   & \textbf{38/42} & \textbf{90.5\%} & \\
+\textbf{Legitimate (FP)} & \textbf{0/23}  & \textbf{0.0\%}  & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The four queries that were not blocked are reconnaissance probes that obtain no prompt content; the architecture tolerates ambiguous interactions while it prevents the disclosure of protected information. Multi-turn escalation has the lowest rate because input validation is stateless: every request is scored on its own, and escalation sessions spread their intent over turns that are individually benign, so that only one of the five sessions contains a turn that reaches the blocking threshold by itself. The sessions that were blocked were intercepted by the combination of the escalation heuristics of Layer~2 and the output-side leakage filter of Layer~3 once the responses started to approach protected content. Cumulative session-level risk scoring across turns is a natural extension that would close this gap.
+
+\textbf{Threshold sensitivity.} A sensitivity analysis over the evaluation corpus supports the operating point of Layer~2. The coverage of the score-based detector is stable between thresholds 15 and 20 (20 of 42 attacks) and falls sharply at 25 (12 of 42), while no legitimate query scores above 5, which leaves a four-fold margin below the blocking threshold; the attack categories not covered by the generic scorer are handled by the specialized detectors. The detector set was also calibrated iteratively against a preliminary live run, which raised the overall blocking rate from 59.5\% to the final 90.5\% while keeping false positives at zero.
+
+\textbf{Concurrency.} Under concurrent load, throughput remained stable up to 50 concurrent requests (13.8 requests per second); at higher concurrency it degraded because of infrastructure limits of the serverless configuration.
+
+\subsection{Multi-Model Evaluation}
+\label{sec:multimodel}
+
+This section reports the evaluation of the full pipeline across the nine models of Table~\ref{tab:model-roster} under the protocol of Section~\ref{sec:multimodel-protocol}. The comparison addresses RQ1: since the corpus, the prompt, the hardening, the decoding parameters, and the four layers are identical for every model, the variation observed across rows is attributable to the underlying LLM. Table~\ref{tab:multimodel-overall} summarizes block rate, ASR, and FPR per model; Table~\ref{tab:multimodel-percategory} decomposes the block rate by attack category, which shows whether the categories that depend on model behavior, such as naive extraction and multi-turn escalation, behave differently from the categories that the deterministic detectors of Layer~2 cover; and Table~\ref{tab:multimodel-attribution} attributes every outcome to the mechanism that produced it, which separates the model-independent contribution of Layer~2 from the contributions of the model's own refusals and of Layer~3.
+
+\input{tables/tab-multimodel-overall}
+
+\input{tables/tab-multimodel-percategory}
+
+\input{tables/tab-multimodel-attribution}
+
+\TODO{Add the interpretation of Tables~\ref{tab:multimodel-overall}--\ref{tab:multimodel-attribution} after the experimental results are available: differences across model families, model-dependent versus model-independent categories, false-positive behavior, and pre-filter leakage.}
+
+\subsection{Defense-Layer Ablation Study}
+\label{sec:ablation}
+
+This section reports the ablation study defined in Section~\ref{sec:ablation-protocol}, which addresses RQ2. Table~\ref{tab:ablation-results} gives block rate, ASR, and FPR for every configuration of Table~\ref{tab:ablation-configs} and every model, so that the contribution of each mechanism is read as the difference between adjacent configurations: the defensive suffix between C0 and C1, Layer~2 between C1 and C2 or between C3 and C4, and Layer~3 between C1 and C3 or between C2 and C4. Table~\ref{tab:complementarity} reports, for the detect-only configuration C4$^{\dagger}$, how the verdict of Layer~2 and the downstream outcome combine on each attack query; its central cells are the queries that pass Layer~2 and are intercepted by Layer~3, which constitute the direct evidence for the complementarity on which the defense-in-depth claim rests, and the queries that pass both layers, whose leakage quantifies the residual exposure. Table~\ref{tab:ablation-percategory} decomposes the ablation by attack category for the cloud reference model, and Table~\ref{tab:l1-l4-verification} reports the verification of Layers~1 and~4 with their own attack cases.
+
+\input{tables/tab-ablation-results}
+
+\input{tables/tab-complementarity}
+
+\input{tables/tab-ablation-percategory}
+
+\input{tables/tab-l1-l4-verification}
+
+\TODO{Add the interpretation of Tables~\ref{tab:ablation-results}--\ref{tab:l1-l4-verification} after the experimental results are available: individual contribution of the defensive suffix, Layer~2, and Layer~3; complementarity between Layer~2 and Layer~3; residual exposure; categories that depend on each mechanism; and the outcome of the Layer~1 and Layer~4 verification.}

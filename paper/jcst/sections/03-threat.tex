@@ -1,0 +1,49 @@
+\section{Threat Model and Security Requirements}
+\label{sec:threats}
+
+To make the cross-domain trust perspective operational, this section formalizes the threat model for multi-tenant LLM deployments. The setting separates deployment from ownership across administrative boundaries, and the analysis examines how adversaries with different capabilities interact with the system under this constraint. The following subsections define the system model, characterize the adversary classes, and state the security requirements together with the attack vectors they must withstand.
+
+\subsection{System Model}
+
+The architecture is defined over a \emph{two-account boundary}. The \emph{Vendor Account} is trusted and controlled by the Software-as-a-Service (SaaS) vendor; it hosts the prompts, the cryptographic keys, the container registry, and the monitoring infrastructure. The \emph{Customer Account} is semi-trusted; it hosts the deployed agent, an Application Programming Interface (API) gateway, and an event-forwarding component. The boundary maps directly onto Amazon Web Services (AWS) account boundaries, Azure subscription or tenant boundaries, and Google Cloud Platform (GCP) project boundaries, so the model does not depend on a particular provider.
+
+\subsection{Adversary Classes}
+
+Three adversaries with increasing capabilities are considered. The \textbf{Customer Administrator} ($\mathcal{A}_1$) holds full privileges over the customer account: it can inspect deployed resources and container images, read environment variables, and intercept traffic. Its motivation ranges from curiosity to competitive intelligence or the replication of the agent without the vendor. The \textbf{External Attacker} ($\mathcal{A}_2$) reaches only the public API of the agent and relies on prompt injection, jailbreaking, and social engineering through the model's input--output interface. The \textbf{Malicious Insider} ($\mathcal{A}_3$) is a member of either organization with partial access, for instance to development environments, CI/CD pipelines, or logging systems, who attempts to exfiltrate prompt intellectual property.
+
+\subsection{Security Requirements and Attack Mapping}
+
+The architecture must provide three guarantees. \emph{Prompt confidentiality} requires that the plaintext prompt never be accessible inside the customer account, neither at rest nor in transit. \emph{Output integrity} requires that responses reflect the vendor's prompt and that any tampering be detectable. \emph{Forensic traceability} requires that every response carry an invisible per-request fingerprint, so that leaked content can be attributed to an account, a session, and a request. Table~\ref{tab:threats} maps each attack vector to the adversaries able to execute it, to the guarantee it targets, and to the defense layer that counters it. Figure~\ref{fig:dataflow} depicts the same mapping as request flows and contrasts legitimate usage with the attack scenarios. The table uses the abbreviations Hash-based Message Authentication Code (HMAC), man-in-the-middle (MITM), and zero-width character (ZWC).
+
+\begin{table}[ht]
+\caption{\label{tab:threats}Attack vectors, adversary capabilities, and defense layer mapping.}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lccl@{}}
+\toprule
+\textbf{Attack vector} & \textbf{Adv.} & \textbf{Goal} & \textbf{Defense} \\
+\midrule
+Console/API inspection       & $\mathcal{A}_1$                  & Conf. & L1: Cross-acct isolation \\
+Container reverse eng.       & $\mathcal{A}_1$                  & Conf. & L1: Build-time secret \\
+Direct gatekeeper call       & $\mathcal{A}_1$                  & Conf. & L1: HMAC + account binding \\
+Request replay               & $\mathcal{A}_1, \mathcal{A}_2$   & Conf. & L1: Timestamp + nonce \\
+MITM tampering               & $\mathcal{A}_1$                  & Integ. & L1: Body hash in HMAC \\
+Prompt injection / jailbreak & $\mathcal{A}_2$                  & Conf. & L2: Risk scoring \\
+Multi-turn extraction        & $\mathcal{A}_2$                  & Conf. & L2+L3: Score + filter \\
+Output exfiltration          & $\mathcal{A}_2, \mathcal{A}_3$   & Conf. & L3: Canary + detection \\
+Unauthorized redistribution  & $\mathcal{A}_3$                  & Trace. & L3: ZWC fingerprint \\
+Encoding evasion             & $\mathcal{A}_2$                  & Conf. & L2: Encoding detectors \\
+Typoglycemia attacks         & $\mathcal{A}_2$                  & Conf. & L2: Normalization \\
+Monitoring evasion           & $\mathcal{A}_1$                  & All   & L4: Vendor-side logs \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figD-request-flows.png}
+\caption{\label{fig:dataflow}Request flows under legitimate usage and under the attack scenarios of Table~\ref{tab:threats}, with the layer that blocks, denies, or traces each attack and the resulting alert on the vendor side.}
+\end{figure*}
+
+\textbf{Trust assumptions.} The analysis rests on four assumptions: (1)~the vendor's Identity and Access Management (IAM) configuration is correct; (2)~all cross-account communication uses Transport Layer Security (TLS) 1.2 or later; (3)~the container runtime isolates process memory; and (4)~the LLM API does not retain prompts beyond the session. Assumption~(1) is weaker than the hardware attestation of a TEE, but it holds on every cloud provider without additional hardware.

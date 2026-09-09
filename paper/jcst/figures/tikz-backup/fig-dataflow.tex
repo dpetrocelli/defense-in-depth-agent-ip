@@ -1,0 +1,64 @@
+% Request flows: legitimate usage vs attack scenarios (fig:dataflow)
+\begin{tikzpicture}[
+  font=\scriptsize,
+  adv/.style={align=center, font=\scriptsize\bfseries},
+  atk/.style={draw, rounded corners=2pt, align=center, inner sep=2.5pt, text width=2.4cm, minimum height=0.5cm, line width=0.4pt, fill=failfill, draw=failline},
+  rsp/.style={draw, rounded corners=2pt, align=center, inner sep=2.5pt, text width=3cm, minimum height=0.5cm, line width=0.4pt},
+  outc/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, text width=1.5cm, minimum height=0.6cm, line width=0.4pt, font=\scriptsize\bfseries, text=white},
+  flow/.style={-{Latex[length=1.8mm, width=1.3mm]}, line width=0.6pt},
+  frame/.style={draw, rounded corners=4pt, inner sep=6pt, line width=0.6pt},
+  ftitle/.style={font=\scriptsize\bfseries, anchor=south west, inner sep=1pt},
+]
+% adversaries
+\node[adv] at (0.9,-0.72) (a2) {External\\attacker ($\mathcal{A}_2$)};
+\node[adv] at (0.9,-3.02) (a1) {Customer\\administrator ($\mathcal{A}_1$)};
+\node[adv] at (0.9,-4.6)  (a3) {Malicious\\insider ($\mathcal{A}_3$)};
+% attacks
+\node[atk] at (3.5, 0)     (t1) {prompt injection / jailbreak};
+\node[atk] at (3.5,-0.72)  (t2) {multi-turn extraction};
+\node[atk] at (3.5,-1.44)  (t3) {encoding / typoglycemia evasion};
+\node[atk] at (3.5,-2.3)   (t4) {console / API inspection};
+\node[atk] at (3.5,-3.02)  (t5) {container reverse engineering};
+\node[atk] at (3.5,-3.74)  (t6) {request replay};
+\node[atk] at (3.5,-4.6)   (t7) {unauthorized redistribution};
+% responses
+\node[rsp, fill=l2fill, draw=l2line] at (7.2, 0)    (r1) {L2: risk scoring};
+\node[rsp, fill=l3fill, draw=l3line] at (7.2,-0.72) (r2) {L2 + L3: score + output filter};
+\node[rsp, fill=l2fill, draw=l2line] at (7.2,-1.44) (r3) {L2: encoding / typoglycemia detectors};
+\node[rsp, fill=l1fill, draw=l1line] at (7.2,-2.3)  (r4) {L1: cross-account isolation};
+\node[rsp, fill=l1fill, draw=l1line] at (7.2,-3.02) (r5) {L1: build-time secret};
+\node[rsp, fill=l1fill, draw=l1line] at (7.2,-3.74) (r6) {L1: HMAC + nonce + timestamp};
+\node[rsp, fill=l3fill, draw=l3line] at (7.2,-4.6)  (r7) {L3: ZWC fingerprint};
+% outcomes
+\node[outc, fill=outblock, draw=outblock] at (10.4,-0.72) (o1) {BLOCKED};
+\node[outc, fill=outblock, draw=outblock] at (10.4,-3.02) (o2) {DENIED};
+\node[outc, fill=outtrace, draw=outtrace] at (10.4,-4.6)  (o3) {TRACED};
+% L4 and vendor
+\node[rsp, fill=l4fill, draw=l4line, text width=1.9cm, minimum height=0.8cm] at (12.9,-2.66) (l4) {L4: alert\\+ evidence};
+\node[adv] at (15.5,-2.66) (vendor) {IP owner\\(vendor)};
+% edges
+\foreach \t in {t1,t2,t3} {\draw[flow] (a2.east) -- (\t.west);}
+\foreach \t in {t4,t5,t6} {\draw[flow] (a1.east) -- (\t.west);}
+\draw[flow] (a3.east) -- (t7.west);
+\foreach \i in {1,...,7} {\draw[flow] (t\i.east) -- (r\i.west);}
+\foreach \i in {1,2,3} {\draw[flow] (r\i.east) -- (o1.west);}
+\foreach \i in {4,5,6} {\draw[flow] (r\i.east) -- (o2.west);}
+\draw[flow] (r7.east) -- (o3.west);
+\foreach \o in {o1,o2,o3} {\draw[flow, dashed] (\o.east) -- (l4.west);}
+\draw[flow] (l4.east) -- node[font=\tiny, below, align=center]{immediate\\alert} (vendor.west);
+% legitimate usage
+\node[adv] at (0.9,-6.1) (eu) {End\\user};
+\node[rsp, fill=custnode, draw=custline, text width=2.4cm] at (3.5,-6.1) (g) {API gateway};
+\node[rsp, fill=custnode, draw=custline, text width=3cm] at (7.2,-6.1) (ag) {agent: Layers 1--4 applied};
+\node[rsp, fill=okfill, draw=okline, text width=2.6cm] at (10.6,-6.1) (wr) {watermarked response};
+\draw[flow] (eu.east) -- node[font=\tiny, above]{request} (g.west);
+\draw[flow] (g.east) -- node[font=\tiny, above]{validated} (ag.west);
+\draw[flow] (ag.east) -- node[font=\tiny, above]{response} (wr.west);
+% frames
+\begin{scope}[on background layer]
+\node[frame, fill=failfill!35, draw=failline!60, fit=(a2)(t1)(t7)(vendor)(a3)] (fa) {};
+\node[frame, fill=okfill!60, draw=okline!70, fit=(eu)(g)(ag)(wr)] (fl) {};
+\end{scope}
+\node[ftitle] at (fa.north west) {Attack scenarios};
+\node[ftitle] at (fl.north west) {Legitimate usage};
+\end{tikzpicture}

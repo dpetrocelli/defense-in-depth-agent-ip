@@ -1,0 +1,40 @@
+% Two-account architecture (fig:architecture)
+\begin{tikzpicture}[
+  font=\footnotesize,
+  node distance=4.5mm and 10mm,
+  comp/.style={draw, rounded corners=2.5pt, align=center, inner sep=4pt, minimum width=4.1cm, minimum height=0.95cm, line width=0.5pt},
+  vnode/.style={comp, fill=vendornode, draw=vendorline},
+  cnode/.style={comp, fill=custnode, draw=custline},
+  acct/.style={draw, dashed, rounded corners=5pt, inner sep=7pt, line width=0.7pt},
+  flow/.style={-{Latex[length=2.2mm, width=1.6mm]}, line width=0.7pt},
+  lbl/.style={font=\scriptsize, fill=white, inner sep=1.5pt, align=center},
+]
+\node[vnode] (secrets) {\textbf{Secrets Store}\\KMS-encrypted prompts};
+\node[vnode, below=of secrets] (gate) {\textbf{Serverless Gatekeeper}\\HMAC validation, prompt delivery};
+\node[vnode, below=of gate] (registry) {\textbf{Container Registry}\\agent image};
+\node[vnode, below=of registry] (bus) {\textbf{Central Event Bus}\\rules, alerts, audit archive};
+
+\node[cnode, right=4.6cm of secrets] (apigw) {\textbf{API Gateway}\\rate limited};
+\node[cnode, below=of apigw] (agent) {\textbf{Containerized Agent}\\prompt in process memory only};
+\node[cnode, below=of agent] (fwd) {\textbf{Event Forwarder}\\structured security events};
+\node[cnode, below=of fwd] (audit) {\textbf{Audit Log}\\immutable, 90-day retention};
+
+\node[align=center, right=8mm of apigw] (user) {End\\user};
+
+\begin{scope}[on background layer]
+\node[acct, fill=vendorfill, draw=vendorline, fit=(secrets)(bus)] (vendorbox) {};
+\node[acct, fill=custfill, draw=custline, fit=(apigw)(audit)] (custbox) {};
+\end{scope}
+\node[font=\footnotesize\bfseries, anchor=south west, inner sep=1pt] at (vendorbox.north west) {Vendor Account (trusted)};
+\node[font=\footnotesize\bfseries, anchor=south west, inner sep=1pt] at (custbox.north west) {Customer Account (semi-trusted)};
+
+\draw[flow] (user) -- node[lbl, above]{HTTPS} (apigw);
+\draw[flow] (apigw) -- (agent);
+\draw[flow, red!75!black] ([yshift=2.2mm]agent.west) -- node[lbl, above]{HMAC-signed prompt request} ([yshift=2.2mm]gate.east);
+\draw[flow, dashed, blue!65!black] ([yshift=-2.2mm]gate.east) -- node[lbl, below]{encrypted prompt + integrity hash} ([yshift=-2.2mm]agent.west);
+\draw[flow, dashed, gray!70!black] (gate) -- node[lbl, right]{decrypt} (secrets);
+\draw[flow, dashed, violet!80!black] (registry.east) -- node[lbl, sloped, above, pos=0.3]{image pull} ([xshift=-8mm]agent.south);
+\draw[flow, gray!70!black] (agent) -- (fwd);
+\draw[flow, gray!70!black] (fwd) -- (audit);
+\draw[flow, orange!85!black] (fwd.west) -- node[lbl, sloped, above, pos=0.7]{security events} (bus.east);
+\end{tikzpicture}

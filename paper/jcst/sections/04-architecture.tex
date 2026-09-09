@@ -1,0 +1,96 @@
+\section{Defense-in-Depth Architecture}
+\label{sec:arch}
+
+The architecture composes four defense layers into a sequential trust chain, in the same way that network security pipelines chain firewalls, Intrusion Detection Systems (IDS), Web Application Firewalls (WAF), and Security Information and Event Management (SIEM) systems. Figure~\ref{fig:architecture} shows the two-account deployment model and separates the trusted vendor-side components from the customer-controlled infrastructure.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figA-two-account-architecture.png}
+\caption{\label{fig:architecture}Two-account architecture for cross-domain prompt protection.}
+\end{figure*}
+
+The \emph{Vendor Account} contains the trusted components: a secrets store whose prompts are encrypted with a Key Management Service (KMS) key, a serverless gatekeeper in charge of authentication and prompt delivery, a container registry, and a central event bus. The \emph{Customer Account} contains the deployed components: the containerized agent, an API gateway with rate limiting, and an event-forwarding mechanism. The agent obtains its prompt at runtime and keeps it exclusively in process memory. This separation enforces an invariant on which the whole design depends: the system prompt is never persisted in customer-controlled storage and exists only transiently during inference.
+
+Figure~\ref{fig:architecture} describes where components are deployed; the security of the architecture also depends on how requests are processed across them. Preserving prompt confidentiality across accounts requires a sequence of coordinated defenses applied at different stages of the interaction. Figure~\ref{fig:pipeline} shows this defense-in-depth pipeline as four sequential layers whose composition covers the complete request lifecycle.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figB-defense-in-depth-pipeline.png}
+\caption{\label{fig:pipeline}Defense-in-depth pipeline: Layers~1 and~2 act before model inference, Layer~3 acts on the model output, and Layer~4 receives the security events of every layer.}
+\end{figure*}
+
+Each layer covers a distinct part of the attack surface. Layer~1 secures prompt delivery through cryptographic request validation. Layer~2 applies OWASP-aligned input validation to detect adversarial inputs before they reach the model. Layer~3 filters model outputs and embeds forensic fingerprints to prevent leakage and support attribution. Layer~4 centralizes cross-account monitoring to enable anomaly detection and coordinated response. Figure~\ref{fig:layers} details the internal mechanism of each layer; the following subsections describe them in turn, followed by the prompt-level hardening that complements them.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figC-internal-mechanism-layers.png}
+\caption{\label{fig:layers}Internal mechanism of each defense layer as implemented in the reference implementation: validation order of the gatekeeper (Layer~1), scoring and blocking decision (Layer~2), output checks and fingerprint embedding (Layer~3), and event sources, forwarding, alerting, and audit (Layer~4).}
+\end{figure*}
+
+\subsection{Layer 1: Cryptographic Prompt Delivery}
+\label{sec:layer1}
+
+This layer guarantees that only authenticated agents can retrieve prompts and that requests can be neither tampered with nor replayed. The guarantee follows from a cryptographic binding between the request payload, the originating account, and temporal information. Each request carries an HMAC with SHA-256 (HMAC-SHA256) signature over a structured message:
+\begin{equation}
+\label{eq:hmac}
+m = \mathit{ts} \;\|\; \mathit{nonce} \;\|\; \mathit{account\_id} \;\|\; \text{SHA256}(\mathit{body})
+\end{equation}
+The signature is $\sigma = \text{HMAC-SHA256}(k, m)$, where $k$ is a pre-shared secret key. The construction protects the integrity of the request body, binds the request to one account, and provides freshness through the timestamp and the nonce.
+
+Before releasing the prompt, the gatekeeper checks four properties: (1)~the timestamp lies within a bounded window, set to five minutes in the reference implementation, which limits replay; (2)~the nonce has not been observed before, which a short-lived cache enforces within that window; (3)~the account identifier belongs to an allow-list; and (4)~the request body matches the signed hash. All comparisons use constant-time operations to avoid timing side channels. The gatekeeper additionally enforces a per-account request rate and raises an alert after repeated failed attempts from the same account. Together with the prompt, it returns an integrity hash (SHA-256 of the prompt content) that the agent verifies on receipt, which extends integrity protection end to end. The signing key is supplied at container build time through a build secret that is never written to an image layer, so it cannot be recovered from the image history.
+
+At the application layer, the mechanism therefore provides request authenticity, payload integrity, and replay protection. These properties keep prompt delivery secure even against adversaries with visibility into the execution environment.
+
+\subsection{Layer 2: OWASP-Aligned Input Validation}
+\label{sec:layer2}
+
+This layer mitigates prompt injection and adversarial manipulation by screening user inputs before they reach the model. It relies on a quantitative risk assessment aligned with the OWASP LLM Top~10~\cite{owasp2025} and with the complementary taxonomy of the National Institute of Standards and Technology (NIST)~\cite{nist2025aml,promptinjection2026}.
+
+Every incoming message receives a risk score computed from the patterns it matches. The patterns correspond to known attack strategies, such as instruction override, jailbreak personas, prompt extraction requests, and structural injection markers, and are grouped into four severity tiers with additive weights: critical ($+30$), high ($+20$), medium ($+10$), and low ($+5$). Structural heuristics add smaller increments for unusually long inputs, an excessive number of line breaks, or embedded markup tags. Inputs whose score reaches a fixed threshold, set to 20, are blocked with a fixed refusal message; inputs in the medium band are logged as suspicious and allowed through. The threshold follows from the weights: a score of 20 corresponds to one high-severity pattern or to two independent medium-severity signals, so a single reference to an encoding scheme is tolerated while combinations of weaker signals trigger blocking. This design prevents explicit attacks without over-restricting legitimate technical queries; the empirical support for the operating point is reported in Section~\ref{sec:live}.
+
+Two specialized detectors extend coverage beyond explicit patterns. A typoglycemia detector matches deliberately misspelled variants of security-critical keywords, such as ``ignroe'' or ``systme'', against a dictionary of known variants; two or more variants add $+20$ to the score. An encoding detector flags payloads hidden through base64, hexadecimal, or Unicode escape sequences, as well as explicit requests to decode ROT13 or similar transformations; any detected encoding adds $+20$. Before the message is forwarded to the model, a sanitization step replaces known injection prefixes, such as override commands or fake role markers, with a neutral placeholder. Together, these mechanisms form the first line of defense against adversarial inputs: they reduce the likelihood that malicious instructions reach the model while preserving flexibility for legitimate use.
+
+\subsection{Layer 3: Output Filtering and Watermarking}
+\label{sec:layer3}
+
+This layer prevents the disclosure of sensitive information in model responses and enables forensic attribution of generated content. It processes every response with three complementary mechanisms: leakage detection, active signaling, and covert fingerprinting.
+
+First, responses are inspected for prompt leakage with a set of compiled regular expressions that recognize meta-instructions, role definitions, jailbreak success indicators, and configuration dumps, and with a sliding-window comparison against the delivered prompt: the prompt is divided into 50-character chunks, and a response that reproduces any chunk is treated as a leak. Responses that trigger either check are replaced by a fixed safe message. Second, canary tokens are embedded in the prompt itself. Each canary is an HTML comment that contains a truncated SHA-256 hash derived from the account identifier and a timestamp; it is placed before and after the prompt body, remains invisible in normal operation, and produces an alert and a blocked response whenever it appears in an output. Third, every response is augmented with a steganographic fingerprint built from zero-width Unicode characters (ZWC)~\cite{zheng2020zwc,waterfall2024}. The fingerprint encodes a hash of the account, session, and request identifiers and is distributed across the generated text, so that it remains imperceptible and resists naive removal. Algorithm~\ref{alg:watermark} shows the embedding procedure of the reference implementation. The same module provides Personally Identifiable Information (PII) detection and redaction routines, which the static test suite exercises.
+
+\begin{algorithm}[ht]
+\caption{ZWC-based watermark embedding}
+\label{alg:watermark}
+\begin{algorithmic}[1]
+\Function{Watermark}{$text, account, session, request$}
+    \State $h \gets \text{SHA256}(account \| session \| request)$
+    \State $w \gets \text{EncodeZWC}(h[0{:}8])$ \Comment{hex digits to ZWC sequences}
+    \State $(w_1, w_2, w_3) \gets \text{Split}(w, 3)$
+    \State $words \gets \text{SplitWords}(text)$
+    \If{$|words| > 4$}
+        \State $P \gets$ three distinct random positions in $[1, |words|)$
+        \For{$(p_i, w_i)$ \textbf{in} $\text{zip}(\text{sorted}(P), (w_1, w_2, w_3))$}
+            \State $words[p_i] \gets w_i \| words[p_i]$
+        \EndFor
+        \State \Return $\text{JoinWords}(words)$
+    \Else
+        \State \Return $w \| text$
+    \EndIf
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+The mechanisms of this layer provide two complementary guarantees: prevention of prompt leakage at generation time, and post hoc attribution when content is exfiltrated. Proactive filtering and reactive traceability thus reinforce each other.
+
+\subsection{Layer 4: Cross-Account Monitoring}
+\label{sec:layer4}
+
+This layer provides system-wide observability and coordinated detection of security events across the trust boundary. Monitoring is centralized in the vendor-controlled environment, so adversaries operating inside the customer account cannot suppress or alter security-relevant signals.
+
+Events generated by all layers are forwarded to a central event bus, where they are aggregated and correlated. They include authentication failures, replay attempts, body-hash mismatches, and rate-limit violations from Layer~1; input-validation triggers from Layer~2; and leakage or canary detections from Layer~3. The customer account additionally forwards control-plane events that indicate tampering by a privileged principal, such as modifications of the agent function, changes to the IAM roles that protect it, direct access attempts to the secrets store, alterations of the audit trail, or activation of model-invocation logging. Alerting policies escalate suspicious activity: in the reference implementation, three gatekeeper authentication failures within five minutes, five rate-limit rejections within five minutes, or any replay attempt raise an alert, and every input-validation block in the customer account is forwarded within one minute. All events are also written to an immutable audit log with a 90-day retention period, so that incidents can be reconstructed even after a partial compromise.
+
+This final layer complements the preceding ones with detection, accountability, and coordinated response across administrative domains.
+
+\subsection{Prompt-Level Hardening}
+\label{sec:hardening}
+
+Besides the four layers, the prompt delivered by the gatekeeper is hardened in memory before the agent is instantiated. In addition to the canary tokens of Layer~3, a defensive suffix appends eight explicit rules that instruct the model never to reveal, paraphrase, or encode its instructions, to decline extraction attempts framed as roleplay, hypotheticals, or translation, and to answer such attempts with a fixed refusal sentence. This control is inexpensive and requires no infrastructure, but its effect depends entirely on the instruction-following behavior of the underlying model, which the architecture does not control. For that reason it is not counted as a defense layer: it is treated as an explicit factor in the multi-model evaluation and in the ablation study, and the reproducibility environment provides alternative variants of the suffix designed for small open-weight models (Section~\ref{sec:local-env}).

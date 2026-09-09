@@ -1,0 +1,28 @@
+% Defense-in-depth pipeline (fig:pipeline)
+\begin{tikzpicture}[
+  font=\scriptsize,
+  layer/.style={draw, rounded corners=3pt, align=left, inner sep=4pt, text width=2.7cm, minimum height=2.3cm, line width=0.5pt},
+  endp/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, text width=1.15cm, minimum height=0.9cm, line width=0.4pt, fill=white},
+  flow/.style={-{Latex[length=2.2mm, width=1.6mm]}, line width=0.8pt},
+  evt/.style={-{Latex[length=1.8mm, width=1.3mm]}, line width=0.5pt, dashed, draw=l4line},
+]
+\node[endp] (req) {User\\request};
+\node[layer, fill=l1fill, draw=l1line, right=3mm of req] (l1) {\textbf{Layer 1}\\\textbf{Cryptographic delivery}\\[2pt] HMAC-SHA256 sign + verify\\ timestamp window + nonce\\ account allow-list\\ body hash, integrity hash};
+\node[layer, fill=l2fill, draw=l2line, right=3mm of l1] (l2) {\textbf{Layer 2}\\\textbf{Input validation}\\[2pt] risk score, four severity tiers\\ typoglycemia detector\\ encoding detector\\ sanitization; score $\geq 20$: block};
+\node[endp, fill=llmfill, draw=llmline, right=3mm of l2, minimum height=2.3cm] (llm) {LLM\\inference};
+\node[layer, fill=l3fill, draw=l3line, right=3mm of llm] (l3) {\textbf{Layer 3}\\\textbf{Output filtering}\\[2pt] leak patterns\\ 50-char prompt chunks\\ canary tokens\\ ZWC fingerprint};
+\node[endp, right=3mm of l3] (resp) {Safe\\response};
+\node[draw, rounded corners=2pt, align=center, inner sep=3pt, fill=hardfill, draw=hardline, above=3.5mm of llm, text width=3.2cm] (hard) {\textbf{Prompt hardening}\\defensive suffix + canary tokens};
+\node[layer, fill=l4fill, draw=l4line, anchor=north, text width=8.4cm, minimum height=1cm]
+  at ($(l1.south west)!0.5!(l3.south east)+(0,-5.5mm)$) (l4)
+  {\textbf{Layer 4 Cross-account monitoring:} security events forwarded from every layer to the central event bus of the vendor account; alert policies; immutable audit log (90-day retention)};
+\draw[flow] (req) -- (l1);
+\draw[flow] (l1) -- (l2);
+\draw[flow] (l2) -- (llm);
+\draw[flow] (llm) -- (l3);
+\draw[flow] (l3) -- (resp);
+\draw[flow, dashed] (hard) -- (llm);
+\draw[evt] (l1.south) -- (l1.south |- l4.north);
+\draw[evt] (l2.south) -- (l2.south |- l4.north);
+\draw[evt] (l3.south) -- (l3.south |- l4.north);
+\end{tikzpicture}

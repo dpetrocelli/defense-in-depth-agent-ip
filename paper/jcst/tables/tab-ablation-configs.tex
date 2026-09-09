@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\caption{\label{tab:ablation-configs}Ablation configurations. Layer~1 (gatekeeper delivery) and Layer~4 (monitoring) remain active in every configuration, since they do not act on the input--output path of a request; they are verified separately (Table~\ref{tab:l1-l4-verification}). DP denotes the defensive suffix of Section~\ref{sec:hardening}.}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+\textbf{Config.} & \textbf{Description} & \textbf{DP} & \textbf{L2 scoring} & \textbf{L2 blocking} & \textbf{Sanitization} & \textbf{L3 filter} & \textbf{Canary} & \textbf{Watermark} \\
+\midrule
+C0            & No defenses (model-only floor)             & --         & --         & --         & --         & --         & --         & -- \\
+C1            & DP only                                    & \checkmark & --         & --         & --         & --         & --         & -- \\
+C2            & DP + Layer~2                               & \checkmark & \checkmark & \checkmark & \checkmark & --         & --         & -- \\
+C3            & DP + Layer~3                               & \checkmark & --         & --         & --         & \checkmark & \checkmark & \checkmark \\
+C4            & DP + Layer~2 + Layer~3 (deployed pipeline) & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+C4$^{\dagger}$ & As C4 with Layer~2 in detect-only mode    & \checkmark & \checkmark & --         & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table*}

@@ -1,0 +1,55 @@
+\section{Performance and Cost Evaluation}
+\label{sec:perf-cost}
+
+\subsection{Latency Overhead}
+
+Table~\ref{tab:performance} reports the latency added by each defense layer in the AWS reference implementation over $n=1{,}000$ requests.
+
+\begin{table*}[t]
+\begin{minipage}[t]{0.36\textwidth}
+\caption{\label{tab:performance}Latency overhead per defense layer (ms, $n=1{,}000$).}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Layer} & \textbf{P50} & \textbf{P95} & \textbf{P99} \\
+\midrule
+L1: HMAC validation     & 2.1  & 3.8  & 5.2 \\
+L2: Risk scoring        & 8.3  & 14.7 & 19.1 \\
+L3: Output filter + ZWC & 12.5 & 22.3 & 31.6 \\
+L4: Event forwarding    & 4.1  & 8.2  & 12.4 \\
+\midrule
+\textbf{Total}          & \textbf{27.0} & \textbf{49.0} & \textbf{68.3} \\
+\bottomrule
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.61\textwidth}
+\caption{\label{tab:cost}Monthly infrastructure cost of the defense layers by provider (50K requests).}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}l l r r r@{}}
+\toprule
+\textbf{Component} & \textbf{Service primitive} & \textbf{AWS} & \textbf{Azure} & \textbf{GCP} \\
+\midrule
+Secrets + Encryption & Managed secrets + KMS key              & \$1.40 & \$1.60 & \$1.06 \\
+Gatekeeper + API     & FaaS function + HTTP endpoint          & \$0.05 & \$0.00 & \$0.00 \\
+Event Bus            & Cross-account event routing            & \$0.00 & \$0.00 & \$0.00 \\
+Audit Storage        & Immutable log storage (90-day)         & \$0.25 & \$0.25 & \$0.25 \\
+Monitoring           & Log ingestion + retention              & \$0.03 & \$0.10 & \$0.05 \\
+Container Registry   & Image storage (\textasciitilde100\,MB) & \$0.01 & \$5.01 & \$0.01 \\
+\midrule
+\textbf{Total}       &                                        & \textbf{\$1.74} & \textbf{\$6.96} & \textbf{\$1.37} \\
+\bottomrule
+\end{tabular}
+\end{minipage}
+\end{table*}
+
+The total overhead at P99 is 68.3\,ms, well under the 100--200\,ms range that is imperceptible in conversational applications. Cold starts of the container-based function average 1.2\,s; provisioned concurrency removes them at approximately \$4.50 per month and per instance, a cost that is not part of the base infrastructure cost reported next.
+
+\subsection{Infrastructure Cost}
+
+Table~\ref{tab:cost} reports the monthly infrastructure cost of the defense layers on three cloud providers at 50,000 requests per month. Function-as-a-Service (FaaS) denotes the serverless execution of the gatekeeper component. The figures are \emph{independent of model inference}: the defenses operate at the transport and application layers and do not modify inference calls, so the cost of LLM invocation is unchanged.
+
+The defense layers add a minimal infrastructure cost that is negligible relative to model inference. The architecture is therefore economically feasible for real deployments, including those of moderate scale.

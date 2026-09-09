@@ -1,0 +1,134 @@
+\documentclass{jcst}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+\graphicspath{{figures/}}
+
+% TikZ figures
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds,calc}
+\definecolor{vendorfill}{HTML}{EAF1FB}
+\definecolor{vendornode}{HTML}{D5E3F7}
+\definecolor{vendorline}{HTML}{5B7DB1}
+\definecolor{custfill}{HTML}{FFF8E6}
+\definecolor{custnode}{HTML}{FBE9C2}
+\definecolor{custline}{HTML}{C99A2E}
+\definecolor{l1fill}{HTML}{FCE4EC}
+\definecolor{l1line}{HTML}{C2185B}
+\definecolor{l2fill}{HTML}{FFF3E0}
+\definecolor{l2line}{HTML}{EF6C00}
+\definecolor{l3fill}{HTML}{FFFDE7}
+\definecolor{l3line}{HTML}{B59B00}
+\definecolor{l4fill}{HTML}{E3F2FD}
+\definecolor{l4line}{HTML}{1565C0}
+\definecolor{llmfill}{HTML}{EDE7F6}
+\definecolor{llmline}{HTML}{6A4C9C}
+\definecolor{hardfill}{HTML}{F3E5F5}
+\definecolor{hardline}{HTML}{8E24AA}
+\definecolor{failfill}{HTML}{F8D7DA}
+\definecolor{failline}{HTML}{B71C1C}
+\definecolor{okfill}{HTML}{E6F4EA}
+\definecolor{okline}{HTML}{2E7D32}
+\definecolor{outblock}{HTML}{B03A2E}
+\definecolor{outtrace}{HTML}{7D3C98}
+
+% Float placement: let pages carry more floats so that the result tables of
+% Section 7 stay close to their text instead of drifting past the back matter.
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\dbltopfraction}{0.95}
+\renewcommand{\dblfloatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{5}
+
+% Markers for content that depends on the pending experimental campaign.
+\newcommand{\TBD}{\textbf{TBD}}
+\newcommand{\TODO}[1]{\textbf{[TODO: #1]}}
+
+\title{Layered Prompt Protection for AI Agents in Customer-Controlled Cloud Accounts: Model Robustness and Defense-Layer Contribution \\
+\large Protecci\'on en capas de prompts para agentes de IA en cuentas de nube controladas por el cliente: robustez frente al modelo y contribuci\'on de las capas de defensa}
+
+\author[1\orcid{0009-0000-7331-3751}]{David Petrocelli}
+\author[1,2\orcid{0000-0001-9291-3066}]{Juan Manuel Fern\'andez}
+
+\affil[1]{Universidad Nacional de Luj\'an (UNLu), Buenos Aires, Argentina \authorcr
+dpetrocelli@unlu.edu.ar, jmfernandez@unlu.edu.ar}
+\affil[2]{Buenos Aires Institute of Technology (ITBA), Argentina \authorcr
+jmfernandez@itba.edu.ar}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Large language models (LLMs) relocate a substantial share of application logic from executable code to natural-language system prompts. When AI agents must run inside customer-controlled cloud accounts to satisfy data residency constraints, these prompts become exposed to privileged principals even though they constitute proprietary intellectual property. This article treats the problem as a cross-domain trust problem and presents a defense-in-depth architecture that composes four software-based layers, cryptographic prompt delivery, OWASP-aligned input validation, output filtering with steganographic watermarking, and cross-account monitoring, into a trust chain that provides prompt confidentiality, output integrity, and forensic traceability without Trusted Execution Environments. The architecture is implemented with standard serverless services and validated through penetration testing and a live two-account deployment. This article extends our previous conference work with two experimental contributions: a multi-model evaluation that measures the robustness of the defense layers across nine LLMs from six model families under an identical protocol, and an ablation study that quantifies the individual and complementary contribution of each defense layer. \TODO{Add the main quantitative findings once the experimental results are available.}
+\end{abstract}
+
+\keywords{AI security, defense-in-depth, multi-tenant cloud, prompt protection, watermarking}
+
+\renewcommand{\abstractname}{Resumen}
+\begin{abstract}
+Los modelos de lenguaje de gran tama\~no (LLM) trasladan una parte sustancial de la l\'ogica de las aplicaciones desde el c\'odigo ejecutable hacia \emph{system prompts} en lenguaje natural. Cuando los agentes de IA deben ejecutarse dentro de cuentas de nube controladas por el cliente para cumplir requisitos de residencia de datos, esos prompts quedan expuestos a principales con privilegios, aun cuando constituyen propiedad intelectual. Este art\'iculo aborda el problema como un problema de confianza entre dominios y presenta una arquitectura de defensa en profundidad que compone cuatro capas de software, entrega criptogr\'afica del prompt, validaci\'on de entradas alineada con OWASP, filtrado de salidas con marca de agua esteganogr\'afica y monitoreo entre cuentas, en una cadena de confianza que provee confidencialidad del prompt, integridad de las salidas y trazabilidad forense sin entornos de ejecuci\'on confiables. La arquitectura se implementa con servicios \emph{serverless} est\'andar y se valida mediante pruebas de penetraci\'on y un despliegue real en dos cuentas. Este art\'iculo extiende nuestro trabajo previo de conferencia con dos contribuciones experimentales: una evaluaci\'on multimodelo que mide la robustez de las capas de defensa sobre nueve LLM de seis familias bajo un protocolo id\'entico, y un estudio de ablaci\'on que cuantifica la contribuci\'on individual y complementaria de cada capa. \TODO{Incorporar los hallazgos cuantitativos principales cuando est\'en disponibles los resultados experimentales.}
+\end{abstract}
+
+\palabrasclaves{defensa en profundidad, marca de agua, nube multiinquilino, protecci\'on de prompts, seguridad de IA}
+
+\input{sections/01-introduction}
+\input{sections/02-related}
+\setcounter{dbltopnumber}{1} % at most one double-column float per page top for the figure-heavy sections
+\input{sections/03-threat}
+\input{sections/04-architecture}
+\setcounter{dbltopnumber}{2}
+\input{sections/05-implementation}
+\input{sections/06-methodology}
+\input{sections/07-security-eval}
+\input{sections/08-perf-cost}
+\input{sections/09-discussion}
+\input{sections/10-conclusions}
+
+\clearpage % flush every pending float before the back matter and the references
+
+\begin{small}
+
+\authorcontributions{
+\TODO{Complete with the CRediT roles agreed by the authors (DP, JMF).} All authors reviewed the results and approved the final version of the manuscript.
+}
+
+\competinginterests{
+The authors have declared that no competing interests exist.
+}
+
+\aideclaration{
+\TODO{Select the applicable statement required by the journal.}
+% Positive case: ``During the preparation of this work, the authors used [TOOL/SERVICE NAME] to [REASON]. After using this tool/service, the authors reviewed and edited the content as needed and take full responsibility for the content of the publication''.
+% Negative case: ``The authors have declared that no GenAI or AI-assisted technologies were used in the research/writing process''.
+}
+
+\dataavailability{
+The reference implementation, the Terraform modules, the local reproducibility environment, the attack and legitimate-query corpus, the experimental tooling, and the raw results of the experiments are available at \url{https://github.com/dpetrocelli/defense-in-depth-agent-ip}.
+}
+
+\bibliography{references}
+
+\end{small}
+
+\vspace*{2cm}
+
+\cornersize{.2}
+\setlength{\fboxsep}{8pt}
+
+% Please, don't remove the Citation Box (edited at the copyediting stage)
+\ovalbox{
+\begin{minipage}{\dimexpr\columnwidth-4\fboxsep-2\fboxrule\relax}
+\textbf{Citation:} D. Petrocelli and J. M. Fern\'andez. \emph{Layered Prompt Protection for AI Agents in Customer-Controlled Cloud Accounts: Model Robustness and Defense-Layer Contribution}. Journal of Computer Science \& Technology, vol.~XX, no.~X, pp.~X--X, 2026.
+
+\textbf{DOI:} to be assigned at the copyediting stage.
+
+\textbf{Received:} to be completed. \textbf{Accepted:} to be completed.
+
+\textbf{Copyright:} This article is distributed under the terms of the Creative Commons License CC-BY-NC-SA.
+\end{minipage}
+}
+
+\end{document}

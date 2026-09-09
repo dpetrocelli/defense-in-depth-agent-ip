@@ -1,0 +1,109 @@
+% Internal mechanism of each defense layer (fig:layers)
+\begin{tikzpicture}[
+  font=\scriptsize,
+  stp/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=0.5cm, line width=0.4pt, fill=white},
+  chk/.style={stp, fill=okfill, draw=okline},
+  bad/.style={stp, fill=failfill, draw=failline},
+  flow/.style={-{Latex[length=1.8mm, width=1.3mm]}, line width=0.6pt},
+  bflow/.style={flow, draw=failline},
+  bline/.style={draw=failline, line width=0.6pt},
+  panel/.style={draw, rounded corners=4pt, inner sep=6pt, line width=0.6pt, fill=white},
+  ptitle/.style={font=\scriptsize\bfseries, anchor=south west, inner sep=1pt},
+]
+
+% ---------------- Panel 1: Layer 1 ----------------
+\begin{scope}
+\node[stp, anchor=north, fill=custnode, draw=custline, text width=4.6cm] at (0,0) (a1)
+  {\textbf{Agent (customer account)}\\
+   $m = ts \,\|\, nonce \,\|\, acct \,\|\, \mathrm{SHA256}(body)$;\quad $\sigma = \mathrm{HMAC}_k(m)$};
+\node[chk, text width=2.9cm, below=2.5mm of a1, xshift=-1cm] (c1) {timestamp within 5-min window?};
+\node[chk, text width=2.9cm, below=1.2mm of c1] (c2) {nonce not seen before?};
+\node[chk, text width=2.9cm, below=1.2mm of c2] (c3) {account in allow-list?};
+\node[chk, text width=2.9cm, below=1.2mm of c3] (c4) {signature valid (constant-time)?};
+\node[chk, text width=2.9cm, below=1.2mm of c4] (c5) {body hash matches?};
+\node[stp, fill=vendornode, draw=vendorline, text width=2.9cm, below=2mm of c5] (ok) {release prompt + integrity hash};
+\node[bad, text width=1.5cm, right=5mm of c3] (rej) {no: reject\\HTTP 4xx\\+ security event};
+\draw[flow] (a1.south -| c1.north) -- node[font=\tiny, right]{signed request} (c1.north);
+\draw[flow] (c1) -- (c2);
+\draw[flow] (c2) -- (c3);
+\draw[flow] (c3) -- (c4);
+\draw[flow] (c4) -- (c5);
+\draw[flow] (c5) -- (ok);
+\coordinate (col) at ([xshift=2.5mm]c1.east);
+\draw[bline] (col |- c1.east) -- (col |- c5.east);
+\foreach \c in {c1,c2,c3,c4,c5} {\draw[bline] (\c.east) -- (\c.east -| col);}
+\draw[bflow] (col |- c3.east) -- (rej.west);
+\node[font=\tiny, anchor=south, inner sep=1pt] at ([yshift=0.5mm]col |- c1.north) {yes $\downarrow$};
+\begin{scope}[on background layer]
+\node[panel, fit=(a1)(c1)(ok)(rej)] (p1) {};
+\end{scope}
+\node[ptitle] at (p1.north west) {Layer 1 --- Cryptographic prompt delivery (gatekeeper checks)};
+\end{scope}
+
+% ---------------- Panel 2: Layer 2 ----------------
+\begin{scope}[xshift=8.3cm]
+\node[stp, anchor=north, fill=custnode, draw=custline, text width=2.6cm] at (0,0) (in) {user message};
+\node[stp, fill=l2fill, draw=l2line, text width=3.2cm, below=2.5mm of in] (sc) {\textbf{pattern scoring}\\critical $+30$, high $+20$\\medium $+10$, low $+5$\\+ structure heuristics};
+\node[stp, fill=l2fill, draw=l2line, text width=2.7cm, right=4mm of sc] (det) {\textbf{specialized detectors}\\typoglycemia ($\geq 2$ variants): $+20$\\encoded content: $+20$};
+\node[stp, fill=l2fill, draw=l2line, text width=3.2cm, below=2.5mm of sc] (rs) {risk score};
+\node[bad, text width=2.7cm, right=4mm of rs] (blk) {$\geq 20$: block\\fixed refusal + security event};
+\node[stp, fill=l2fill, draw=l2line, text width=3.2cm, below=2.5mm of rs] (san) {$< 20$ ($10$--$19$ logged):\\sanitize known injection prefixes};
+\node[stp, fill=llmfill, draw=llmline, text width=2.6cm, below=2.5mm of san] (tom) {to LLM inference};
+\draw[flow] (in) -- (sc);
+\draw[flow] (sc) -- (rs);
+\draw[flow] (det.west) -- (sc.east);
+\draw[bflow] (rs) -- (blk);
+\draw[flow] (rs) -- (san);
+\draw[flow] (san) -- (tom);
+\begin{scope}[on background layer]
+\node[panel, fit=(in)(sc)(det)(blk)(tom)] (p2) {};
+\end{scope}
+\node[ptitle] at (p2.north west) {Layer 2 --- OWASP-aligned input validation};
+\end{scope}
+
+% ---------------- Panel 3: Layer 3 ----------------
+\begin{scope}[yshift=-6.9cm]
+\node[stp, anchor=north, fill=llmfill, draw=llmline, text width=2.6cm] at (0,0) (out) {model output};
+\node[chk, text width=3.2cm, below=2.5mm of out] (k1) {canary token present?};
+\node[chk, text width=3.2cm, below=1.2mm of k1] (k2) {leak pattern matched?};
+\node[chk, text width=3.2cm, below=1.2mm of k2] (k3) {50-char prompt chunk reproduced?};
+\node[bad, text width=2.4cm, right=5mm of k2] (rep) {yes: replace with safe message + security event};
+\node[stp, fill=l3fill, draw=l3line, text width=3.9cm, below=2.5mm of k3] (wm) {\textbf{ZWC fingerprint}\\SHA-256(account:session:request)[0:8]\\three fragments at random word boundaries};
+\node[stp, fill=custnode, draw=custline, text width=2.6cm, below=2.5mm of wm] (resp) {response to caller};
+\draw[flow] (out) -- (k1);
+\draw[flow] (k1) -- (k2);
+\draw[flow] (k2) -- (k3);
+\draw[flow] (k3) -- node[font=\tiny, right]{no} (wm);
+\draw[flow] (wm) -- (resp);
+\coordinate (col3) at ([xshift=2.5mm]k1.east);
+\draw[bline] (col3 |- k1.east) -- (col3 |- k3.east);
+\foreach \c in {k1,k2,k3} {\draw[bline] (\c.east) -- (\c.east -| col3);}
+\draw[bflow] (col3 |- k2.east) -- (rep.west);
+\begin{scope}[on background layer]
+\node[panel, fit=(out)(k1)(rep)(wm)(resp)] (p3) {};
+\end{scope}
+\node[ptitle] at (p3.north west) {Layer 3 --- Output filtering and watermarking};
+\end{scope}
+
+% ---------------- Panel 4: Layer 4 ----------------
+\begin{scope}[xshift=8.3cm, yshift=-6.9cm]
+\node[stp, anchor=north, fill=l1fill, draw=l1line, text width=2.5cm] at (0,0) (s1) {L1: auth failure, replay,\\rate limit, body tamper};
+\node[stp, fill=l2fill, draw=l2line, text width=2.5cm, below=1.2mm of s1] (s2) {L2: input block};
+\node[stp, fill=l3fill, draw=l3line, text width=2.5cm, below=1.2mm of s2] (s3) {L3: leak filter, canary};
+\node[stp, fill=custnode, draw=custline, text width=2.5cm, below=1.2mm of s3] (s4) {control plane: agent function modified, IAM change, secrets access, audit trail, model logging};
+\node[stp, fill=custnode, draw=custline, text width=1.6cm, right=4.5mm of s2] (fw) {event forwarder (customer)};
+\node[stp, fill=vendornode, draw=vendorline, text width=1.6cm, right=4.5mm of fw] (bus) {central event bus (vendor)};
+\node[bad, text width=3.5cm, anchor=north] at ($(fw.south)!0.5!(bus.south)+(0,-3mm)$) (al)
+  {\textbf{alert policies}\\3 auth failures / 5 min; 5 rate limits / 5 min;\\any replay; input block within 1 min};
+\node[stp, fill=vendornode, draw=vendorline, text width=3.5cm, below=2.5mm of al] (au) {\textbf{immutable audit log}, 90-day retention};
+\foreach \s in {s1,s2,s3,s4} {\draw[flow] (\s.east) -- (fw.west);}
+\draw[flow] (fw) -- (bus);
+\draw[flow] (bus.south) -- (bus.south |- al.north);
+\draw[flow] (al) -- (au);
+\begin{scope}[on background layer]
+\node[panel, fit=(s1)(s4)(bus)(al)(au)] (p4) {};
+\end{scope}
+\node[ptitle] at (p4.north west) {Layer 4 --- Cross-account monitoring};
+\end{scope}
+
+\end{tikzpicture}

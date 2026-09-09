@@ -1,0 +1,28 @@
+\begin{table*}[t]
+\caption{\label{tab:l1-l4-verification}Verification of Layer~1 and Layer~4 in the multi-account environment. Layer~1 cases are executed against the gatekeeper with the production code; the expected responses follow from its validation order. Layer~4 cases check that each event class reaches the central event bus and, where an alerting policy applies, raises an alert on the alert topic.}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+\textbf{Layer} & \textbf{Case} & \textbf{Adversary} & \textbf{Expected outcome} & \textbf{Observed} \\
+\midrule
+L1 & Valid signed request                 & --                               & HTTP 200, prompt with valid integrity hash & \TBD \\
+L1 & Missing authentication headers       & $\mathcal{A}_1$, $\mathcal{A}_2$ & HTTP 400, no prompt content                & \TBD \\
+L1 & Account not in allow-list            & $\mathcal{A}_1$                  & HTTP 403, no prompt content                & \TBD \\
+L1 & Timestamp outside the 5-minute window & $\mathcal{A}_1$, $\mathcal{A}_2$ & HTTP 403, no prompt content               & \TBD \\
+L1 & Replayed nonce                       & $\mathcal{A}_1$, $\mathcal{A}_2$ & HTTP 403, replay event                     & \TBD \\
+L1 & Forged signature                     & $\mathcal{A}_1$                  & HTTP 403, no prompt content                & \TBD \\
+L1 & Tampered request body                & $\mathcal{A}_1$                  & HTTP 403, body-tamper event                & \TBD \\
+L1 & Per-account rate limit exceeded      & $\mathcal{A}_2$                  & HTTP 429, rate-limit event                 & \TBD \\
+\midrule
+L4 & Three authentication failures within 5 min & $\mathcal{A}_1$            & Events on central bus; alert raised        & \TBD \\
+L4 & Replay attempt                       & $\mathcal{A}_1$, $\mathcal{A}_2$ & Event on central bus; immediate alert      & \TBD \\
+L4 & Five rate-limit rejections within 5 min & $\mathcal{A}_2$               & Events on central bus; alert raised        & \TBD \\
+L4 & Layer~2 input block                  & $\mathcal{A}_2$                  & Event forwarded within 1 min               & \TBD \\
+L4 & Layer~3 leakage filter               & $\mathcal{A}_2$                  & Event on central bus                       & \TBD \\
+L4 & Canary token in output               & $\mathcal{A}_2$                  & Event on central bus; alert raised         & \TBD \\
+L4 & Customer-side tampering (agent function modified) & $\mathcal{A}_1$     & Control-plane event forwarded              & \TBD \\
+\bottomrule
+\end{tabular}
+\end{table*}
