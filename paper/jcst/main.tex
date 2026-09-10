@@ -1,6 +1,8 @@
 \documentclass{jcst}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{float}
+\usepackage{balance} % balances the columns of the last page (flushend does not manage it with the citation box)
 
 \graphicspath{{figures/}}
 
@@ -41,6 +43,7 @@
 \renewcommand{\dblfloatpagefraction}{0.75}
 \setcounter{topnumber}{3}
 \setcounter{totalnumber}{5}
+\setcounter{dbltopnumber}{1} % never stack two double-column floats on one page
 
 % Markers for content that depends on the pending experimental campaign.
 \newcommand{\TBD}{\textbf{TBD}}
@@ -52,34 +55,31 @@
 \author[1\orcid{0009-0000-7331-3751}]{David Petrocelli}
 \author[1,2\orcid{0000-0001-9291-3066}]{Juan Manuel Fern\'andez}
 
-\affil[1]{Universidad Nacional de Luj\'an (UNLu), Buenos Aires, Argentina \authorcr
-dpetrocelli@unlu.edu.ar, jmfernandez@unlu.edu.ar}
-\affil[2]{Buenos Aires Institute of Technology (ITBA), Argentina \authorcr
-jmfernandez@itba.edu.ar}
+\affil[1]{National University of Luj\'an, Luj\'an, Argentina}
+\affil[2]{Buenos Aires Institute of Technology (ITBA), Buenos Aires, Argentina}
+\affil[ ]{\normalfont\texttt{dpetrocelli@unlu.edu.ar, jmfernandez@\{unlu,itba\}.edu.ar}}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Large language models (LLMs) relocate a substantial share of application logic from executable code to natural-language system prompts. When AI agents must run inside customer-controlled cloud accounts to satisfy data residency constraints, these prompts become exposed to privileged principals even though they constitute proprietary intellectual property. This article treats the problem as a cross-domain trust problem and presents a defense-in-depth architecture that composes four software-based layers, cryptographic prompt delivery, OWASP-aligned input validation, output filtering with steganographic watermarking, and cross-account monitoring, into a trust chain that provides prompt confidentiality, output integrity, and forensic traceability without Trusted Execution Environments. The architecture is implemented with standard serverless services and validated through penetration testing and a live two-account deployment. This article extends our previous conference work with two experimental contributions: a multi-model evaluation that measures the robustness of the defense layers across nine LLMs from six model families under an identical protocol, and an ablation study that quantifies the individual and complementary contribution of each defense layer. \TODO{Add the main quantitative findings once the experimental results are available.}
+Large language models relocate a substantial share of application logic from executable code to natural-language system prompts. When AI agents must run inside customer-controlled cloud accounts for data residency, these prompts are exposed to privileged principals despite being proprietary intellectual property. We treat this as a cross-domain trust problem and present a defense-in-depth architecture that composes four software-based layers, cryptographic prompt delivery, OWASP-aligned input validation, output filtering with steganographic watermarking, and cross-account monitoring, into a trust chain that reduces prompt exposure and supports output-integrity controls and forensic traceability under the stated trust assumptions, without Trusted Execution Environments. It is implemented with standard serverless services and validated through penetration testing and a live two-account deployment. This article extends our conference work with a multi-model evaluation of nine LLMs from six families under an identical protocol and an ablation study of the defense layers. With the full pipeline no final response met the verbatim leakage criterion for any model, while the block rate ranged from 62.7\% to 93.7\% across models. Input validation contributes a model-independent floor of 59.5\%, prompt hardening supplies most of the remaining block rate with a strongly model-dependent effect, and output filtering removes the residual verbatim leakage.
 \end{abstract}
 
 \keywords{AI security, defense-in-depth, multi-tenant cloud, prompt protection, watermarking}
 
 \renewcommand{\abstractname}{Resumen}
 \begin{abstract}
-Los modelos de lenguaje de gran tama\~no (LLM) trasladan una parte sustancial de la l\'ogica de las aplicaciones desde el c\'odigo ejecutable hacia \emph{system prompts} en lenguaje natural. Cuando los agentes de IA deben ejecutarse dentro de cuentas de nube controladas por el cliente para cumplir requisitos de residencia de datos, esos prompts quedan expuestos a principales con privilegios, aun cuando constituyen propiedad intelectual. Este art\'iculo aborda el problema como un problema de confianza entre dominios y presenta una arquitectura de defensa en profundidad que compone cuatro capas de software, entrega criptogr\'afica del prompt, validaci\'on de entradas alineada con OWASP, filtrado de salidas con marca de agua esteganogr\'afica y monitoreo entre cuentas, en una cadena de confianza que provee confidencialidad del prompt, integridad de las salidas y trazabilidad forense sin entornos de ejecuci\'on confiables. La arquitectura se implementa con servicios \emph{serverless} est\'andar y se valida mediante pruebas de penetraci\'on y un despliegue real en dos cuentas. Este art\'iculo extiende nuestro trabajo previo de conferencia con dos contribuciones experimentales: una evaluaci\'on multimodelo que mide la robustez de las capas de defensa sobre nueve LLM de seis familias bajo un protocolo id\'entico, y un estudio de ablaci\'on que cuantifica la contribuci\'on individual y complementaria de cada capa. \TODO{Incorporar los hallazgos cuantitativos principales cuando est\'en disponibles los resultados experimentales.}
+Los LLM trasladan gran parte de la l\'ogica aplicativa del c\'odigo ejecutable a \emph{system prompts}. Cuando los agentes de IA deben ejecutarse en cuentas de nube del cliente por residencia de datos, esos prompts quedan expuestos a principales con privilegios aunque son propiedad intelectual. Tratamos el problema como uno de confianza entre dominios y presentamos una arquitectura de defensa en profundidad de cuatro capas (entrega criptogr\'afica del prompt, validaci\'on de entradas alineada con OWASP, filtrado de salidas con marca de agua esteganogr\'afica y monitoreo entre cuentas) que reduce la exposici\'on del prompt y provee controles de integridad de las salidas y trazabilidad forense bajo los supuestos de confianza declarados, sin entornos de ejecuci\'on confiables. Extendemos nuestro trabajo de conferencia con una evaluaci\'on multimodelo de nueve LLM de seis familias y un estudio de ablaci\'on de las capas. Con el pipeline completo ninguna respuesta final cumpli\'o el criterio de fuga literal, con tasas de bloqueo entre 62,7\,\% y 93,7\,\%. La validaci\'on de entradas aporta un piso del 59,5\,\% independiente del modelo, el endurecimiento del prompt provee la mayor parte del bloqueo restante con un efecto muy dependiente del modelo, y el filtrado de salidas elimina la fuga literal residual.
 \end{abstract}
 
 \palabrasclaves{defensa en profundidad, marca de agua, nube multiinquilino, protecci\'on de prompts, seguridad de IA}
 
 \input{sections/01-introduction}
 \input{sections/02-related}
-\setcounter{dbltopnumber}{1} % at most one double-column float per page top for the figure-heavy sections
 \input{sections/03-threat}
 \input{sections/04-architecture}
-\setcounter{dbltopnumber}{2}
 \input{sections/05-implementation}
 \input{sections/06-methodology}
 \input{sections/07-security-eval}
@@ -87,12 +87,10 @@ Los modelos de lenguaje de gran tama\~no (LLM) trasladan una parte sustancial de
 \input{sections/09-discussion}
 \input{sections/10-conclusions}
 
-\clearpage % flush every pending float before the back matter and the references
-
 \begin{small}
 
 \authorcontributions{
-\TODO{Complete with the CRediT roles agreed by the authors (DP, JMF).} All authors reviewed the results and approved the final version of the manuscript.
+The authors confirm contribution to the paper as follows: DP: Conceptualization, Software, Investigation, Data curation, Validation, Writing -- review and editing; JMF: Conceptualization, Methodology, Formal analysis, Writing -- original draft, Writing -- review and editing. All authors reviewed the results and approved the final version of the manuscript.
 }
 
 \competinginterests{
@@ -100,20 +98,19 @@ The authors have declared that no competing interests exist.
 }
 
 \aideclaration{
-\TODO{Select the applicable statement required by the journal.}
-% Positive case: ``During the preparation of this work, the authors used [TOOL/SERVICE NAME] to [REASON]. After using this tool/service, the authors reviewed and edited the content as needed and take full responsibility for the content of the publication''.
-% Negative case: ``The authors have declared that no GenAI or AI-assisted technologies were used in the research/writing process''.
+During the preparation of this work, the authors used Claude (Anthropic) to assist with the drafting and editing of the manuscript and with the scripts that aggregate the experimental records. After using this tool, the authors reviewed and edited the content as needed and take full responsibility for the content of the publication.
 }
 
 \dataavailability{
-The reference implementation, the Terraform modules, the local reproducibility environment, the attack and legitimate-query corpus, the experimental tooling, and the raw results of the experiments are available at \url{https://github.com/dpetrocelli/defense-in-depth-agent-ip}.
+The reference implementation, the reproducibility environment, the corpus, the experimental tooling, and the raw results are available at \url{https://github.com/dpetrocelli/defense-in-depth-agent-ip}.
 }
 
+\balance
 \bibliography{references}
 
 \end{small}
 
-\vspace*{2cm}
+\vspace*{0pt}
 
 \cornersize{.2}
 \setlength{\fboxsep}{8pt}

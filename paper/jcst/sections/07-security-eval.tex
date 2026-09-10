@@ -4,43 +4,14 @@
 \subsection{Controlled Penetration Testing}
 \label{sec:pentest}
 
-Table~\ref{tab:pentest_results} reports the outcome of the 63 test cases described in Section~\ref{sec:methodology}, grouped by category, together with the OWASP item they exercise and the layer expected to intercept them.
-
-\begin{table}[ht]
-\caption{\label{tab:pentest_results}Penetration test results (63 tests, 100\% pass rate).}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}llccc@{}}
-\toprule
-\textbf{Category} & \textbf{OWASP} & \textbf{Tests} & \textbf{Pass} & \textbf{Layer} \\
-\midrule
-Direct extraction       & LLM01/06 & 8  & 8  & L2+L3 \\
-Multi-turn extraction   & LLM01    & 5  & 5  & L2+L3 \\
-Jailbreak / DAN         & LLM01    & 7  & 7  & L2 \\
-Instruction override    & LLM01    & 6  & 6  & L2 \\
-Prompt injection        & LLM01    & 6  & 6  & L2 \\
-Encoding evasion        & LLM01    & 4  & 4  & L2 \\
-Typoglycemia evasion    & LLM01    & 3  & 3  & L2 \\
-Social engineering      & LLM01    & 5  & 5  & L2 \\
-Output leakage          & LLM02/06 & 6  & 6  & L3 \\
-PII exfiltration        & LLM06    & 4  & 4  & L3 \\
-Response safety         & LLM02    & 5  & 5  & L3 \\
-Replay / auth bypass    & ---      & 4  & 4  & L1 \\
-\midrule
-\textbf{Total}          &          & \textbf{63} & \textbf{63} & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-All authentication bypass attempts against Layer~1, namely expired timestamps, duplicate nonces, forged signatures, and missing headers, were rejected with Hypertext Transfer Protocol (HTTP)~403 responses that disclosed no information. Layer~2 handled the 44 input-facing tests, which range from naive extraction requests to multi-turn social engineering and encoding evasion; in particular, the typoglycemia detector blocked obfuscated variants that defeat a naive regular-expression approach. Layer~3 provided complementary protection: the sliding-window comparison detected partial leakage of fragments of 50 or more characters that the pattern-based check alone did not capture. Finally, eight tests targeted boundary conditions between layers and confirmed that attacks crafted to lower their Layer~2 score were still mitigated by the Layer~3 mechanisms. The jailbreak category includes the ``Do Anything Now'' (DAN) persona attacks.
+All 63 test cases of the controlled suite passed: 44 input-side tests (direct and multi-turn extraction, jailbreak and ``Do Anything Now'' (DAN) personas, instruction override, prompt injection, encoding and typoglycemia evasion, social engineering), 15 output-side tests (output leakage, Personally Identifiable Information (PII) exfiltration, response safety), and 4 replay and authentication bypass tests, which were rejected with Hypertext Transfer Protocol (HTTP)~403 responses that disclosed no information. The typoglycemia detector blocked obfuscated variants that defeat a naive regular-expression approach, the sliding-window comparison of Layer~3 detected partial leakage of fragments of 50 or more characters that the pattern-based check alone did not capture, and eight boundary-condition tests confirmed that attacks crafted to lower their Layer~2 score were still mitigated by Layer~3.
 
 \subsection{Live Two-Account Deployment}
 \label{sec:live}
 
-To validate the architecture under realistic conditions, the full four-layer stack was deployed across two separate cloud accounts, vendor and customer, and exposed to the 42 attack queries and the 23 legitimate queries of Section~\ref{sec:corpus}. Table~\ref{tab:live_detection} reports the outcome per category.
+To validate the architecture under realistic conditions, the full four-layer stack was deployed across two separate cloud accounts, vendor and customer, and exposed to the 42 attack queries and the 23 legitimate queries of Section~\ref{sec:corpus}. Table~\ref{tab:live_detection} reports the outcome per category: every category was fully blocked except naive extraction (6 of 8) and multi-turn escalation (3 of 5), for a total of 38 of 42 attacks (90.5\%) and no false positive on the 23 legitimate queries. The four queries that were not blocked are reconnaissance probes that obtain no prompt content.
 
-\begin{table}[ht]
+\begin{table}[tb]
 \caption{\label{tab:live_detection}Live deployment: attack detection by category (42 attacks, 23 legitimate queries). FP = false positive.}
 \centering
 \scriptsize
@@ -62,38 +33,39 @@ Multi-turn            & 3/5   &  60\% & L2+L3 (escalation) \\
 \textbf{Legitimate (FP)} & \textbf{0/23}  & \textbf{0.0\%}  & \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-The four queries that were not blocked are reconnaissance probes that obtain no prompt content; the architecture tolerates ambiguous interactions while it prevents the disclosure of protected information. Multi-turn escalation has the lowest rate because input validation is stateless: every request is scored on its own, and escalation sessions spread their intent over turns that are individually benign, so that only one of the five sessions contains a turn that reaches the blocking threshold by itself. The sessions that were blocked were intercepted by the combination of the escalation heuristics of Layer~2 and the output-side leakage filter of Layer~3 once the responses started to approach protected content. Cumulative session-level risk scoring across turns is a natural extension that would close this gap.
-
-\textbf{Threshold sensitivity.} A sensitivity analysis over the evaluation corpus supports the operating point of Layer~2. The coverage of the score-based detector is stable between thresholds 15 and 20 (20 of 42 attacks) and falls sharply at 25 (12 of 42), while no legitimate query scores above 5, which leaves a four-fold margin below the blocking threshold; the attack categories not covered by the generic scorer are handled by the specialized detectors. The detector set was also calibrated iteratively against a preliminary live run, which raised the overall blocking rate from 59.5\% to the final 90.5\% while keeping false positives at zero.
-
-\textbf{Concurrency.} Under concurrent load, throughput remained stable up to 50 concurrent requests (13.8 requests per second); at higher concurrency it degraded because of infrastructure limits of the serverless configuration.
+\end{table} Multi-turn escalation has the lowest rate because input validation is stateless: escalation sessions spread their intent over turns that are individually benign, only one of the five sessions contains a turn that reaches the blocking threshold by itself, and the sessions that were blocked were intercepted by the escalation heuristics of Layer~2 and the output-side filter of Layer~3 once the responses approached protected content; cumulative session-level scoring would close this gap. A sensitivity analysis over the corpus supports the operating point of Layer~2: the coverage of the score-based detector is stable between thresholds 15 and 20 (20 of 42 attacks) and falls sharply at 25 (12 of 42), while no legitimate query scores above 5. The detector set was calibrated iteratively against a preliminary live run, which raised the overall blocking rate from 59.5\% to the final 90.5\% while keeping false positives at zero. Under concurrent load, throughput remained stable up to 50 concurrent requests (13.8 requests per second) and degraded at higher concurrency because of infrastructure limits.
 
 \subsection{Multi-Model Evaluation}
 \label{sec:multimodel}
 
-This section reports the evaluation of the full pipeline across the nine models of Table~\ref{tab:model-roster} under the protocol of Section~\ref{sec:multimodel-protocol}. The comparison addresses RQ1: since the corpus, the prompt, the hardening, the decoding parameters, and the four layers are identical for every model, the variation observed across rows is attributable to the underlying LLM. Table~\ref{tab:multimodel-overall} summarizes block rate, ASR, and FPR per model; Table~\ref{tab:multimodel-percategory} decomposes the block rate by attack category, which shows whether the categories that depend on model behavior, such as naive extraction and multi-turn escalation, behave differently from the categories that the deterministic detectors of Layer~2 cover; and Table~\ref{tab:multimodel-attribution} attributes every outcome to the mechanism that produced it, which separates the model-independent contribution of Layer~2 from the contributions of the model's own refusals and of Layer~3.
-
 \input{tables/tab-multimodel-overall}
-
 \input{tables/tab-multimodel-percategory}
 
-\input{tables/tab-multimodel-attribution}
+Table~\ref{tab:multimodel-overall} reports the full pipeline across the nine models under the protocol of Section~\ref{sec:multimodel-protocol}; since the corpus, the prompt, the hardening, the decoding parameters, and the four layers are identical for every model, the variation across rows is attributable to the underlying LLM.
 
-\TODO{Add the interpretation of Tables~\ref{tab:multimodel-overall}--\ref{tab:multimodel-attribution} after the experimental results are available: differences across model families, model-dependent versus model-independent categories, false-positive behavior, and pre-filter leakage.}
+No final response met the verbatim leakage criterion: the ASR is 0.0\% for all nine models, that is, none of the 1,134 attack requests of this condition returned a canary token or a 50-character chunk of the base prompt to the caller. The block rate, in contrast, depends strongly on the model: it ranges from 62.7\% for Llama~3.2 1B to 93.7\% for Nova Lite, with Mistral~7B, Gemma~4 E4B, Llama~3 8B, and Qwen~3.5 9B above 84\% and Phi-4 Mini and Qwen~3.5 4B below 75\%. The value of Nova Lite is consistent with the 90.5\% of the live deployment. Standard deviations across runs do not exceed 4.1 points, so the differences between models are not run-to-run variation.
+
+The attribution columns separate the model-independent part of this result from the model-dependent part. Layer~2 blocked exactly 75 of the 126 attack requests of every model, that is, 25 of the 42 attacks in each run (59.5\%): the risk scorer and the specialized detectors are deterministic, so their contribution does not depend on the model, and it coincides with the 59.5\% floor observed during the calibration of Section~\ref{sec:live}. Everything above that floor comes from the refusals of the model, which follow the defensive suffix, and from Layer~3. Refusals account for 43 of the remaining 51 requests for Nova Lite and for none of them for Llama~3.2 1B, with the other models in between (13 to 33); Layer~3 intercepted between 0 and 7 responses per model. The requests that were neither blocked nor refused, from 8 for Nova Lite to 47 for Llama~3.2 1B, were answered without reproducing protected content. Two caveats apply: a refusal is recognized by the fixed refusal sentence, so a model that declines in its own words counts as having passed, and passing without leak is judged by the verbatim oracle.
+
+Table~\ref{tab:multimodel-percategory} shows where the model matters. Four of the eight naive extraction attacks, four of the five override commands, four of the seven jailbreaks, three of the four encoded payloads, two of the four typoglycemia variants, four of the five social-engineering attacks, three of the four indirect injections, and one of the five multi-turn turns reach the blocking threshold of Layer~2 on their own; this floor is visible in the column of Llama~3.2 1B, which coincides with it in every category except multi-turn escalation, where Layer~3 adds four interceptions. The remaining attacks are intercepted only when the model refuses them or Layer~3 filters the response: naive extraction and typoglycemia are fully covered by four models each, whereas multi-turn escalation remains the weakest category for every model except Llama~3 8B (from 3 of 15 turns for Gemma~3 4B and Phi-4 Mini to 15 of 15), although every escalation session was intercepted in at least one turn for all nine models.
+
+The false-positive rate is also model-dependent, and it originates in the defensive suffix rather than in Layer~2, which blocked no legitimate query in any configuration of the campaign. Five models answered between one and four of the 23 legitimate queries with the fixed refusal sentence, mostly short generic questions such as ``What time is it?'', which yields FPRs between 4.3\% (Llama~3 8B) and 15.9\% (Gemma~3 4B); Llama~3.2 1B and the two Qwen models produced no false positive. The 11.6\% of Gemma~4 E4B is of a different nature: the model returned empty responses to the three long legitimate queries, which the classification counts as refusals, also without any defense (C0), so this rate reflects the model runtime rather than the defenses. Finally, the pre-filter leakage shows what Layer~3 removed: with the full pipeline, 29.4\% of the raw outputs that reached the model reproduced a chunk of the prompt for Mistral~7B, 5.9\% for Llama~3.2 1B, Llama~3 8B, and Gemma~4 E4B, and 3.9\% for Qwen~3.5 4B, and none of these fragments reached the caller.
+
+In answer to RQ1, the architecture kept the attack success rate, as measured by the verbatim criterion, at zero for every model family, while the block rate, which measures how early an attack is stopped, varied by 31 points between the weakest and the strongest model; the variation is entirely attributable to the defensive suffix and the refusal behavior of the model, since the contribution of Layer~2 was identical for all models.
 
 \subsection{Defense-Layer Ablation Study}
 \label{sec:ablation}
 
-This section reports the ablation study defined in Section~\ref{sec:ablation-protocol}, which addresses RQ2. Table~\ref{tab:ablation-results} gives block rate, ASR, and FPR for every configuration of Table~\ref{tab:ablation-configs} and every model, so that the contribution of each mechanism is read as the difference between adjacent configurations: the defensive suffix between C0 and C1, Layer~2 between C1 and C2 or between C3 and C4, and Layer~3 between C1 and C3 or between C2 and C4. Table~\ref{tab:complementarity} reports, for the detect-only configuration C4$^{\dagger}$, how the verdict of Layer~2 and the downstream outcome combine on each attack query; its central cells are the queries that pass Layer~2 and are intercepted by Layer~3, which constitute the direct evidence for the complementarity on which the defense-in-depth claim rests, and the queries that pass both layers, whose leakage quantifies the residual exposure. Table~\ref{tab:ablation-percategory} decomposes the ablation by attack category for the cloud reference model, and Table~\ref{tab:l1-l4-verification} reports the verification of Layers~1 and~4 with their own attack cases.
-
 \input{tables/tab-ablation-results}
-
 \input{tables/tab-complementarity}
-
-\input{tables/tab-ablation-percategory}
-
 \input{tables/tab-l1-l4-verification}
 
-\TODO{Add the interpretation of Tables~\ref{tab:ablation-results}--\ref{tab:l1-l4-verification} after the experimental results are available: individual contribution of the defensive suffix, Layer~2, and Layer~3; complementarity between Layer~2 and Layer~3; residual exposure; categories that depend on each mechanism; and the outcome of the Layer~1 and Layer~4 verification.}
+Table~\ref{tab:ablation-results} gives block rate, ASR, and FPR for every configuration of Table~\ref{tab:ablation-configs} and every model. Without content defenses (C0) no attack is blocked, and the intrinsic leakage of the models ranges from 0.0\% (Qwen~3.5 9B) to 34.1\% (Llama~3 8B), 13.0\% on average. The defensive suffix alone (C1) raises the mean block rate to 55.0\% and lowers the mean ASR to 5.2\%, but its effect is the most model-dependent of the study: the block rate goes from 6.3\% for Llama~3.2 1B to 93.6\% for Nova Lite, and Mistral~7B and Qwen~3.5 4B still leak in 19.0\% and 15.9\% of the attacks. Adding Layer~2 (C2) raises the mean block rate by 24.0 points. Layer~2 blocks the same 25 attacks per run for every model, so its gain is largest where the model refuses least: +54.0 points for Llama~3.2 1B, +42.1 for Qwen~3.5 4B, and between +31 and +36 for Gemma~3 4B, Phi-4 Mini, and Llama~3 8B, against +0.1 for Nova Lite and $-$0.8 for Gemma~4 E4B, whose refusals already cover most of what Layer~2 blocks. Layer~2 reduces the mean ASR to 2.1\% but does not eliminate it: Mistral~7B leaks in 12.7\% of the attacks and four other models in 0.8--2.4\%, because Layer~2 stops only the attacks that match its patterns and the model answers the rest. Adding Layer~3 instead (C3) raises the mean block rate by only 2.7 points, but it brings the ASR to 0.0\% for all nine models, as does the full pipeline (C4).
+
+The two layers therefore contribute different properties: Layer~2 determines how many attacks are stopped before inference, at no cost in false positives; Layer~3 determines whether what the model generates reaches the caller, and it closes the residual leakage left by the model and by Layer~2. The marginal contributions summarize this asymmetry: +24.0 and +23.3 points of block rate for Layer~2 against +2.7 and +2.0 for Layer~3, and $-$5.2 and $-$2.1 points of ASR for Layer~3 against $-$3.1 and 0.0 for Layer~2. The false positives of the pipeline come from the defensive suffix (mean FPR 6.0\% in C1) and, marginally, from Layer~3, which filtered one legitimate response of Qwen~3.5 9B; Layer~2 added none.
+
+Table~\ref{tab:complementarity} shows the two layers on the same requests. Of the 17 attack queries per run that pass Layer~2, Layer~3 intercepted the response for Qwen~3.5 4B (10 of 51 requests over the three runs), Mistral~7B (9), Llama~3.2 1B (3), and Nova Lite (2); for the other five models, the queries that passed Layer~2 were either refused by the model or answered without leaking. Layer~3 also intercepted responses to attacks that Layer~2 would have blocked (11 for Qwen~3.5 4B, 6 for Mistral~7B, 3 for Gemma~4 E4B), which is redundant coverage. No request passed both layers with a leaked response for any model: in detect-only mode the block rate falls to between 4.8\% (Llama~3.2 1B) and 95.9\% (Nova Lite), yet the ASR remains 0.0\%. The cells ``Layer~2 would block, passes'' quantify what the deterministic layer adds beyond the model: 72 of 75 such requests for Llama~3.2 1B, 48 for Qwen~3.5 4B, and 42 for Llama~3 8B, against none for Nova Lite, so for the weakest models Layer~2 is the only mechanism that keeps these attacks from reaching inference. For the cloud reference model the defensive suffix alone already intercepts 117 of the 126 attack requests, and multi-turn escalation is the only category that remains partially covered in every configuration (7 to 9 of 15 turns), consistent with the stateless scoring discussed in Section~\ref{sec:live}; the per-category ablation of every model is provided in the repository.
+
+Table~\ref{tab:l1-l4-verification} reports the verification of the layers outside the ablation. All eight Layer~1 cases produced the expected response of the gatekeeper, without prompt content in any rejected case. For Layer~4, the gatekeeper-side alert on repeated failures fired at the fifth failure, which is the threshold implemented in the function, whereas the three-failure and replay alerts of the design are cloud metric alarms that the local environment does not emulate. On the cloud deployment, a Layer~2 block, a Layer~3 filter, and a configuration change of the agent function all reached the central bus or the alert topic within the one-minute evaluation period of the alarms; the canary case could not be exercised because no run reproduced a canary token. The verification also exposed a defect of the deployment: the policy of the central alert topic authorized the event rules to publish only on behalf of the customer accounts, so the alerts fanned out from the central bus were being denied; the policy was corrected, the table was measured after the correction, and the delivery metrics of the rules before and after it document the cause.
+
+In answer to RQ2, the defense-in-depth claim holds in a specific form, and for the content-path protections: the defensive suffix supplies most of the block rate, but with an effect that depends on the model and is small for the smallest one; Layer~2 adds a model-independent floor of 59.5\% at no cost in false positives; and Layer~3 is the component that removes the residual verbatim leakage, measured with the same criterion the layer applies at runtime, so its value lies in what it had to remove, up to 29.4\% of the raw outputs, rather than in the zero itself. Layer~1 and Layer~4 are not factors of this comparison: they were validated functionally, as authentication and integrity controls and as the auditing and response path, respectively. No configuration without Layer~3 achieved zero leakage for all nine models, no configuration without Layer~2 exceeded a mean block rate of 58\%, and only the full pipeline combined a mean block rate above 80\% with zero leakage across models.

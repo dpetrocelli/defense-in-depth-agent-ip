@@ -1,61 +1,17 @@
 \section{Reference Implementation and Reproducibility}
 \label{sec:implementation}
 
-The implementation is a central part of the contribution: it shows that the architecture can be built from standard managed services, and it provides the artifacts used in every experiment reported in this article. The reference implementation and the experimental artifacts are publicly available\footnote{\url{https://github.com/dpetrocelli/defense-in-depth-agent-ip}}.
+The implementation is a central part of the contribution: it shows that the architecture can be built from standard managed services, and it provides the artifacts used in every experiment of this article. The reference implementation and the experimental artifacts are publicly available\footnote{\url{https://github.com/dpetrocelli/defense-in-depth-agent-ip}}.
 
 \subsection{Cloud Deployment}
 
-The system is built on serverless services, which provide automatic scaling and cost-efficient operation, and is defined entirely as Infrastructure-as-Code (IaC) with Terraform. Two environments correspond to the two accounts of the model. The central environment provisions the vendor-side components: the encrypted secrets store and its KMS key, the gatekeeper function behind an HTTP endpoint, the container registry, the central event bus with its rules, the alerting topics, and the audit storage. The client environment provisions the customer-side components: the agent function packaged as a container image, the API gateway with throttling, the event forwarder, and the detection rules described in Section~\ref{sec:layer4}. The architecture relies only on service primitives that all major providers offer; Table~\ref{tab:mapping} lists the AWS services of the reference implementation and their equivalents on Azure and Google Cloud.
+The system is built on serverless services and is defined entirely as Infrastructure-as-Code (IaC) with Terraform. Two environments correspond to the two accounts of the model. The central environment provisions the vendor-side components: the encrypted secrets store and its KMS key, the gatekeeper function behind an HTTP endpoint, the container registry, the central event bus with its rules, the alerting topics, and the audit storage. The client environment provisions the customer-side components: the agent function packaged as a container image, the API gateway with throttling, the event forwarder, and the detection rules of Section~\ref{sec:layer4}. The architecture relies only on service primitives that every major provider offers (managed secrets and keys, serverless functions, container registries, cross-account event routing, and immutable log storage), with direct equivalents on Azure and Google Cloud for each AWS service of the reference implementation.
 
-\begin{table*}[t]
-\caption{\label{tab:mapping}Architectural components, services used in the reference implementation, and equivalent services on other providers.}
-\centering
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}llll@{}}
-\toprule
-\textbf{Component} & \textbf{AWS (reference)} & \textbf{Azure} & \textbf{Google Cloud} \\
-\midrule
-Secrets store + KMS        & Secrets Manager + KMS            & Key Vault + Managed HSM          & Secret Manager + Cloud KMS \\
-Serverless gatekeeper      & Lambda + API Gateway             & Functions + API Management       & Cloud Functions (2nd gen) \\
-Container registry         & ECR                              & Container Registry               & Artifact Registry \\
-Cross-account event bus    & EventBridge                      & Event Grid                       & Eventarc \\
-Containerized agent (FaaS) & Lambda (container image)         & Functions (container)            & Cloud Run (container) \\
-Immutable audit log        & S3 Object Lock + CloudWatch Logs & Immutable Blob Storage + Monitor & Cloud Logging + retention \\
-\bottomrule
-\end{tabular}
-\end{table*}
+The agent is a Python application built on an agent framework with tool calling; it exposes an HTTP interface for health checks, tool listing, and invocation, runs both as a serverless function and as a local process, and ships with four demonstration tools (arithmetic, current time, string utilities, and Fibonacci numbers). In the cloud deployment the model is Amazon Nova Lite, invoked through the provider's managed inference service. Layer~1 is split between the gatekeeper function in the vendor account and a signing client inside the agent; Layers~2 and~3 are a self-contained filtering module inside the agent; Layer~4 combines the event forwarder, the event-bus rules, and the alarms of both accounts. Deployment proceeds in three phases: \emph{build}, in which the container image is produced with the signing key mounted as a build secret that is absent from every image layer; \emph{provisioning}, in which the customer-side resources are instantiated through cross-account policies that let the customer function pull the image without granting that permission to the customer administrator; and \emph{activation}, in which the agent retrieves its prompt from the gatekeeper, verifies the integrity hash, applies the hardening of Section~\ref{sec:hardening}, and keeps the result only in process memory. Before serving traffic, a fail-closed pre-flight check verifies that model-invocation logging is disabled in the customer account, which enforces trust assumption~(4) of Section~\ref{sec:threats}.
 
-The agent is a Python application that exposes an HTTP interface with three endpoints, for health checks, tool listing, and invocation, and runs both as a serverless function and as a local process. It is built on an agent framework with tool calling and ships with four demonstration tools (arithmetic, current time, string utilities, and Fibonacci numbers), which makes the injection surface realistic. In the cloud deployment the model is Amazon Nova Lite, invoked through the provider's managed inference service. Layer~1 is split between the gatekeeper function in the vendor account and a signing client inside the agent; Layers~2 and~3 are implemented as a self-contained filtering module inside the agent; Layer~4 combines the event forwarder, the event-bus rules, and the alarms of both accounts.
-
-Deployment proceeds in three phases. In the \emph{build} phase, the container image is produced with the signing key mounted as a build secret, so that the key is available while the image is built but absent from every image layer. In the \emph{provisioning} phase, the customer-side resources are instantiated through cross-account access policies that allow the customer function to pull the image from the vendor registry without granting that permission to the customer administrator. In the \emph{activation} phase, the agent retrieves its prompt from the gatekeeper over the authenticated channel, verifies the integrity hash, applies the hardening of Section~\ref{sec:hardening}, and keeps the result only in process memory. Before serving traffic, a fail-closed pre-flight check verifies that model-invocation logging is disabled in the customer account, which enforces trust assumption~(4) of Section~\ref{sec:threats}.
-
-\subsection{Security Configuration}
-
-Every defense mechanism is governed by a feature flag exposed as an environment variable of the agent (Table~\ref{tab:flags}). All flags default to enabled, and disabling one of them changes only the corresponding mechanism, which allows layer configurations to be compared without code changes. The input sanitization step and canary detection are not governed by flags and remain active in every configuration. This configuration surface is the basis of the ablation study of Section~\ref{sec:ablation}.
-
-\begin{table}[ht]
-\caption{\label{tab:flags}Feature flags of the reference implementation and the mechanism each one governs.}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2pt}
-\begin{tabular}{@{}ll@{}}
-\toprule
-\textbf{Flag} & \textbf{Mechanism governed} \\
-\midrule
-\texttt{USE\_GATEKEEPER}          & L1: prompt retrieval through the gatekeeper \\
-\texttt{ENABLE\_INPUT\_VALIDATION} & L2: risk scoring and specialized detectors \\
-\texttt{BLOCK\_HIGH\_RISK\_INPUTS} & L2: blocking of high and critical inputs \\
-\texttt{ENABLE\_RESPONSE\_FILTER}  & L3: leakage detection on model outputs \\
-\texttt{ENABLE\_WATERMARKING}      & L3: ZWC fingerprint embedding \\
-\texttt{ENABLE\_PREFLIGHT\_CHECK}  & Pre-flight model-logging check \\
-\bottomrule
-\end{tabular}
-\end{table}
+Every defense mechanism is governed by a feature flag exposed as an environment variable of the agent: \texttt{USE\_GATEKEEPER} (Layer~1), \texttt{ENABLE\_INPUT\_VALIDATION} and \texttt{BLOCK\_HIGH\_RISK\_INPUTS} (scoring and blocking in Layer~2), \texttt{ENABLE\_RESPONSE\_FILTER} and \texttt{ENABLE\_WATERMARKING} (Layer~3), and \texttt{ENABLE\_PREFLIGHT\_CHECK}. All flags default to enabled, and disabling one changes only the corresponding mechanism; for the experiments of this article, the defensive suffix, the input sanitization step, and canary detection were placed under flags of their own. This configuration surface is the basis of the ablation study of Section~\ref{sec:ablation}.
 
 \subsection{Local Reproducibility Environment}
 \label{sec:local-env}
 
-To allow experimentation without cloud accounts, the repository provides a Docker Compose environment that combines LocalStack for cloud-service emulation and Ollama for local LLM inference. A single-account variant runs the agent against an emulated secrets store with the gatekeeper disabled. A multi-account variant reproduces the two-account model with two isolated LocalStack instances: a central instance hosts the gatekeeper function behind an API endpoint, the secrets store, the KMS key, and an alerting topic with a queue that allows Layer~4 alerts to be verified; a client instance provides a separate identity for the agent. The gatekeeper executes the same code as in the cloud deployment, so all four layers are exercised end to end without code modifications.
-
-The model is selected through a configuration variable, and any model served by Ollama can be used. The agent uses the native Ollama driver of the agent framework, which transmits the system prompt and the tool definitions as separate fields of the request; an earlier configuration based on a generic proxy library silently dropped the system message when tools were present, which nullified the prompt-level hardening. The environment also provides three alternative defensive suffixes, a minimal variant, a variant that states an explicit boundary between protected and normal requests, and an example-based variant, designed for small open-weight models that either ignore the production suffix or over-apply it. Mechanisms that depend on model behavior, in particular the defensive suffix and the model's own refusals, remain sensitive to the underlying LLM, which is precisely what the multi-model evaluation measures. The repository also contains the experimental tooling: the static penetration-test suite, the attack and legitimate-query corpus with its runner, the false-positive corpus, and the latency benchmark.
+To allow experimentation without cloud accounts, the repository provides a Docker Compose environment that combines LocalStack for cloud-service emulation and Ollama for local LLM inference. A single-account variant runs the agent against an emulated secrets store with the gatekeeper disabled. A multi-account variant reproduces the two-account model with two isolated LocalStack instances: a central instance hosts the gatekeeper function behind an API endpoint, the secrets store, the KMS key, and an alerting topic with a queue that allows Layer~4 alerts to be verified, and a client instance provides a separate identity for the agent. The gatekeeper executes the same code as in the cloud deployment, so all four layers are exercised end to end without code modifications. Any model served by Ollama can be selected through a configuration variable; the agent uses the native Ollama driver of the agent framework, which transmits the system prompt and the tool definitions as separate fields of the request, since a generic proxy library used earlier silently dropped the system message when tools were present. The environment also provides three alternative defensive suffixes for small open-weight models and the experimental tooling (test suite, corpus and runner, false-positive corpus, and latency benchmark).

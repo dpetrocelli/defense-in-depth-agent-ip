@@ -1,18 +1,18 @@
-\begin{table*}[t]
-\caption{\label{tab:ablation-configs}Ablation configurations. Layer~1 (gatekeeper delivery) and Layer~4 (monitoring) remain active in every configuration, since they do not act on the input--output path of a request; they are verified separately (Table~\ref{tab:l1-l4-verification}). DP denotes the defensive suffix of Section~\ref{sec:hardening}.}
+\begin{table}[tb]
+\caption{\label{tab:ablation-configs}Ablation configurations. DP denotes the defensive suffix of Section~\ref{sec:hardening}; Sc and Bl the scoring and the blocking of Layer~2; Sa the input sanitization; Fi, Ca and WM the response filter, the canary detection and the watermark of Layer~3. Layer~1 and Layer~4 remain active in every configuration and are verified separately.}
 \centering
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}llccccccc@{}}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccccccc@{}}
 \toprule
-\textbf{Config.} & \textbf{Description} & \textbf{DP} & \textbf{L2 scoring} & \textbf{L2 blocking} & \textbf{Sanitization} & \textbf{L3 filter} & \textbf{Canary} & \textbf{Watermark} \\
+\textbf{Config.} & \textbf{DP} & \textbf{Sc} & \textbf{Bl} & \textbf{Sa} & \textbf{Fi} & \textbf{Ca} & \textbf{WM} \\
 \midrule
-C0            & No defenses (model-only floor)             & --         & --         & --         & --         & --         & --         & -- \\
-C1            & DP only                                    & \checkmark & --         & --         & --         & --         & --         & -- \\
-C2            & DP + Layer~2                               & \checkmark & \checkmark & \checkmark & \checkmark & --         & --         & -- \\
-C3            & DP + Layer~3                               & \checkmark & --         & --         & --         & \checkmark & \checkmark & \checkmark \\
-C4            & DP + Layer~2 + Layer~3 (deployed pipeline) & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
-C4$^{\dagger}$ & As C4 with Layer~2 in detect-only mode    & \checkmark & \checkmark & --         & \checkmark & \checkmark & \checkmark & \checkmark \\
+C0             & --         & --         & --         & --         & --         & --         & -- \\
+C1             & \checkmark & --         & --         & --         & --         & --         & -- \\
+C2             & \checkmark & \checkmark & \checkmark & \checkmark & --         & --         & -- \\
+C3             & \checkmark & --         & --         & --         & \checkmark & \checkmark & \checkmark \\
+C4             & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+C4$^{\dagger}$ & \checkmark & \checkmark & --         & \checkmark & \checkmark & \checkmark & \checkmark \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}

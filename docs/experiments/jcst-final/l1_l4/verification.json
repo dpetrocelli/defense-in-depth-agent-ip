@@ -1,0 +1,182 @@
+{
+ "meta": {
+  "gatekeeper_url": "http://localhost:4566/restapis/aln7z0127q/prod/_user_request_/prompts",
+  "account": "555666777888",
+  "started_at": "2026-09-09T23:52:45.988027+00:00",
+  "finished_at": "2026-09-10T00:00:23.977500+00:00"
+ },
+ "l1": [
+  {
+   "layer": "L1",
+   "case": "valid signed request",
+   "expected_status": 200,
+   "observed_status": 200,
+   "ok": true,
+   "latency_ms": 59.5,
+   "body": "{\"system_prompt\": \"You are a helpful AI assistant for local development testing. You assist developers with coding questions, debugging, and general technical queries. You are friendly and concise. Ne",
+   "prompt_returned": true,
+   "integrity_hash_valid": true
+  },
+  {
+   "layer": "L1",
+   "case": "missing authentication headers",
+   "expected_status": 400,
+   "observed_status": 400,
+   "ok": true,
+   "latency_ms": 63.6,
+   "body": "{\"error\": \"Missing required headers\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null
+  },
+  {
+   "layer": "L1",
+   "case": "account not in allow-list",
+   "expected_status": 403,
+   "observed_status": 403,
+   "ok": true,
+   "latency_ms": 64.0,
+   "body": "{\"error\": \"Unauthorized client account\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null
+  },
+  {
+   "layer": "L1",
+   "case": "timestamp outside the 5-minute window",
+   "expected_status": 403,
+   "observed_status": 403,
+   "ok": true,
+   "latency_ms": 65.6,
+   "body": "{\"error\": \"Request expired\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null
+  },
+  {
+   "layer": "L1",
+   "case": "replayed nonce",
+   "expected_status": 403,
+   "observed_status": 403,
+   "ok": true,
+   "latency_ms": 65.3,
+   "body": "{\"error\": \"Nonce already used (replay attack detected)\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null,
+   "first_status": 200
+  },
+  {
+   "layer": "L1",
+   "case": "forged signature",
+   "expected_status": 403,
+   "observed_status": 403,
+   "ok": true,
+   "latency_ms": 66.1,
+   "body": "{\"error\": \"Invalid signature\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null
+  },
+  {
+   "layer": "L1",
+   "case": "tampered request body",
+   "expected_status": 403,
+   "observed_status": 403,
+   "ok": true,
+   "latency_ms": 65.4,
+   "body": "{\"error\": \"Request body integrity check failed\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null
+  },
+  {
+   "layer": "L1",
+   "case": "per-account rate limit exceeded",
+   "expected_status": 429,
+   "observed_status": 429,
+   "ok": true,
+   "latency_ms": 58.9,
+   "body": "{\"error\": \"Rate limit exceeded\"}",
+   "prompt_returned": false,
+   "integrity_hash_valid": null,
+   "requests_until_429": 54,
+   "limit": 60
+  }
+ ],
+ "l4": [
+  {
+   "layer": "L4",
+   "case": "three authentication failures within 5 min",
+   "expected": "events on central bus; alert raised",
+   "alert_received": false,
+   "alert": null,
+   "latency_s": null,
+   "trigger": {
+    "failed_attempts": 3,
+    "statuses": [
+     403,
+     403,
+     403
+    ]
+   },
+   "started_at": "2026-09-09T23:53:56.094041+00:00"
+  },
+  {
+   "layer": "L4",
+   "case": "five authentication failures within 5 min (implemented threshold)",
+   "expected": "alert MULTIPLE_FAILED_ATTEMPTS",
+   "alert_received": true,
+   "alert": {
+    "subject": "Gatekeeper Alert: MULTIPLE_FAILED_ATTEMPTS",
+    "message": {
+     "alert_type": "MULTIPLE_FAILED_ATTEMPTS",
+     "severity": "HIGH",
+     "timestamp": "2026-09-09T23:56:02.668938+00:00",
+     "message": "Account 555666777888 has 5 failed attempts. Latest reason: invalid_signature. Source IP: unknown"
+    }
+   },
+   "latency_s": 0.01,
+   "trigger": {
+    "failed_attempts": 5,
+    "statuses": [
+     403,
+     403,
+     403,
+     403,
+     403
+    ]
+   },
+   "started_at": "2026-09-09T23:56:02.460090+00:00"
+  },
+  {
+   "layer": "L4",
+   "case": "replay attempt",
+   "expected": "event on central bus; immediate alert",
+   "alert_received": false,
+   "alert": null,
+   "latency_s": null,
+   "trigger": {
+    "first": 200,
+    "replay": 403,
+    "nonce": "5c7a55de"
+   },
+   "started_at": "2026-09-09T23:57:08.769535+00:00"
+  },
+  {
+   "layer": "L4",
+   "case": "five rate-limit rejections within 5 min",
+   "expected": "events on central bus; alert raised",
+   "alert_received": true,
+   "alert": {
+    "subject": "Gatekeeper Alert: MULTIPLE_FAILED_ATTEMPTS",
+    "message": {
+     "alert_type": "MULTIPLE_FAILED_ATTEMPTS",
+     "severity": "HIGH",
+     "timestamp": "2026-09-09T23:59:18.905437+00:00",
+     "message": "Account 555666777888 has 5 failed attempts. Latest reason: rate_limited. Source IP: unknown"
+    }
+   },
+   "latency_s": 0.01,
+   "trigger": {
+    "sent": 64,
+    "rate_limit_rejections": 5
+   },
+   "started_at": "2026-09-09T23:59:15.069137+00:00"
+  }
+ ]
+}

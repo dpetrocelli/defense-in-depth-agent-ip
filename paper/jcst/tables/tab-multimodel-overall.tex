@@ -1,22 +1,21 @@
-\begin{table}[ht]
-\caption{\label{tab:multimodel-overall}Multi-model evaluation with the full pipeline (configuration C4): blocked attacks, block rate, attack success rate (ASR, leaked final responses), false positives (FP) on the 23 legitimate queries, and false-positive rate (FPR). Mean $\pm$ standard deviation over three runs; requests that ended in transport errors or timeouts are excluded from the denominators.}
+\begin{table*}[t]
+\caption{\label{tab:multimodel-overall}Multi-model evaluation with the full pipeline (configuration C4). Left: block rate, attack success rate (ASR, leaked final responses), and false-positive rate on the 23 legitimate queries, as mean $\pm$ standard deviation over three runs, excluding requests that ended in errors. Right: attribution of the 126 attack requests of each model (42 per run) to the mechanism that determined their outcome. No canary token was reproduced and no leaked response reached the caller for any model.}
 \centering
-\scriptsize
-\setlength{\tabcolsep}{2.5pt}
-\begin{tabular}{@{}lccccc@{}}
+\footnotesize
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}lccc|cccc@{}}
 \toprule
-\textbf{Model} & \textbf{Blocked} & \textbf{Block rate} & \textbf{ASR} & \textbf{FP} & \textbf{FPR} \\
-               & (n/42)           & (\%)                & (\%)         & (n/23)      & (\%) \\
+\textbf{Model} & \textbf{Block rate (\%)} & \textbf{ASR (\%)} & \textbf{FPR (\%)} & \textbf{L2 block} & \textbf{Model refusal} & \textbf{L3 filter} & \textbf{Passed (no leak)} \\
 \midrule
-Nova Lite    & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Llama 3.2 1B & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Llama 3 8B   & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Gemma 3 4B   & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Gemma 4 E4B  & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Phi-4 Mini   & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Mistral 7B   & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Qwen 3.5 4B  & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Qwen 3.5 9B  & \TBD & \TBD & \TBD & \TBD & \TBD \\
+Nova Lite    & 93.7 $\pm$ 1.4 & 0.0 $\pm$ 0.0 &  7.2 $\pm$ 2.5 & 75 & 43 & 0 &  8 \\
+Llama 3.2 1B & 62.7 $\pm$ 1.4 & 0.0 $\pm$ 0.0 &  0.0 $\pm$ 0.0 & 75 &  0 & 4 & 47 \\
+Llama 3 8B   & 85.7 $\pm$ 0.0 & 0.0 $\pm$ 0.0 &  4.3 $\pm$ 0.0 & 75 & 30 & 3 & 18 \\
+Gemma 3 4B   & 81.0 $\pm$ 0.0 & 0.0 $\pm$ 0.0 & 15.9 $\pm$ 2.5 & 75 & 27 & 0 & 24 \\
+Gemma 4 E4B  & 88.1 $\pm$ 4.1 & 0.0 $\pm$ 0.0 & 11.6 $\pm$ 2.5 & 75 & 33 & 3 & 15 \\
+Phi-4 Mini   & 73.8 $\pm$ 0.0 & 0.0 $\pm$ 0.0 & 13.0 $\pm$ 0.0 & 75 & 18 & 0 & 33 \\
+Mistral 7B   & 89.7 $\pm$ 1.4 & 0.0 $\pm$ 0.0 & 13.0 $\pm$ 0.0 & 75 & 31 & 7 & 13 \\
+Qwen 3.5 4B  & 69.8 $\pm$ 2.7 & 0.0 $\pm$ 0.0 &  0.0 $\pm$ 0.0 & 75 & 13 & 0 & 38 \\
+Qwen 3.5 9B  & 84.9 $\pm$ 1.4 & 0.0 $\pm$ 0.0 &  0.0 $\pm$ 0.0 & 75 & 32 & 0 & 19 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}

@@ -1,23 +1,23 @@
-\begin{table*}[t]
-\caption{\label{tab:complementarity}Complementarity between Layer~2 and Layer~3 (configuration C4$^{\dagger}$, Layer~2 in detect-only mode): number of attack queries by Layer~2 verdict and downstream outcome, summed over the three runs. ``L3 intercepts'' includes canary detections; ``passes'' reports the number of leaked responses in parentheses.}
+\begin{table}[tb]
+\caption{\label{tab:complementarity}Complementarity between Layer~2 and Layer~3 (configuration C4$^{\dagger}$, Layer~2 in detect-only mode): attack queries by Layer~2 verdict and downstream outcome, summed over the three runs. ``L3'' includes canary detections; ``Passes'' gives the number of leaked responses in parentheses.}
 \centering
 \scriptsize
-\setlength{\tabcolsep}{4pt}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}lcccccc@{}}
 \toprule
- & \multicolumn{3}{c}{\textbf{Layer~2 would block}} & \multicolumn{3}{c}{\textbf{Layer~2 passes}} \\
+ & \multicolumn{3}{c}{\textbf{L2 would block}} & \multicolumn{3}{c}{\textbf{L2 passes}} \\
 \cmidrule(lr){2-4} \cmidrule(lr){5-7}
-\textbf{Model} & \textbf{L3 intercepts} & \textbf{Model refuses} & \textbf{Passes (leak)} & \textbf{L3 intercepts} & \textbf{Model refuses} & \textbf{Passes (leak)} \\
+\textbf{Model} & \textbf{L3} & \textbf{Refuses} & \textbf{Passes} & \textbf{L3} & \textbf{Refuses} & \textbf{Passes} \\
 \midrule
-Nova Lite    & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Llama 3.2 1B & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Llama 3 8B   & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Gemma 3 4B   & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Gemma 4 E4B  & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Phi-4 Mini   & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Mistral 7B   & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Qwen 3.5 4B  & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
-Qwen 3.5 9B  & \TBD & \TBD & \TBD & \TBD & \TBD & \TBD \\
+Nova Lite    &  0 & 72 &  0 (0) &  2 & 44 &  5 (0) \\
+Llama 3.2 1B &  0 &  3 & 72 (0) &  3 &  0 & 48 (0) \\
+Llama 3 8B   &  0 & 33 & 42 (0) &  0 & 33 & 18 (0) \\
+Gemma 3 4B   &  0 & 42 & 33 (0) &  0 & 24 & 27 (0) \\
+Gemma 4 E4B  &  3 & 59 & 13 (0) &  0 & 36 & 15 (0) \\
+Phi-4 Mini   &  0 & 39 & 36 (0) &  0 & 21 & 30 (0) \\
+Mistral 7B   &  6 & 57 & 12 (0) &  9 & 27 & 15 (0) \\
+Qwen 3.5 4B  & 11 & 16 & 48 (0) & 10 & 11 & 30 (0) \\
+Qwen 3.5 9B  &  0 & 65 & 10 (0) &  0 & 30 & 21 (0) \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
